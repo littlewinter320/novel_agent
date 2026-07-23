@@ -2335,7 +2335,7 @@ env:
   LLM_PROVIDER: deepseek
   LLM_API_KEY: test-key
   LLM_BASE_URL: https://api.deepseek.com/v1
-  LLM_MODEL: deepseek-chat
+  LLM_MODEL: deepseek-v4-flash
   PYTHONIOENCODING: utf-8  # 解决Windows中文编码问题
 ```
 
