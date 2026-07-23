@@ -54,15 +54,15 @@ WARM_MEMORY_FILE = os.path.join(MEMORY_DIR, "warm_memory.json")
 # ========== LLM配置 ==========
 # 支持的提供商: kimi, deepseek, glm, openai, claude, custom
 # 修改以下配置以使用不同的LLM提供商
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "deepseek")
-LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-pro")
-LLM_API_KEY = os.getenv("LLM_API_KEY", "sk-aedf1ed53e7e4d56b0b65807277039ce")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")
 # 温度参数: 0.0-2.0, 值越高输出越随机, 值越低输出越确定
 # 注意: 某些模型可能有特定的温度限制（如kimi-k2.5只支持1.0）
-LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "1"))
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.75"))
 
-LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "8192"))
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "262144"))
 
 
 # ========== 质量检查阈值 ==========
