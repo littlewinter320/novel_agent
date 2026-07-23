@@ -144,10 +144,18 @@ novel_agent/
 ├── main.py                    # 主程序入口
 ├── config.py                  # 配置管理
 ├── requirements.txt           # 依赖列表
+├── pyproject.toml             # 项目构建配置（setuptools）
 ├── README.md                  # 项目文档
 ├── .env.example               # 环境变量示例
 ├── .gitignore                 # Git忽略规则
 ├── LICENSE                    # MIT许可证
+│
+├── .github/                   # GitHub Actions工作流
+│   └── workflows/
+│       ├── ci.yml             # 持续集成（多版本多平台测试）
+│       ├── code-quality.yml   # 代码质量检查 + 安全扫描
+│       ├── deploy.yml         # 自动构建 + GitHub Release
+│       └── docs.yml           # 文档一致性检查
 │
 ├── agents/                    # 6个专业化子Agent
 │   ├── scout.py              # 扫榜分析师
@@ -2294,6 +2302,74 @@ crontab -e
 ```
 0 2 * * * /path/to/backup.sh
 ```
+
+### GitHub Actions 持续集成与部署
+
+项目配置了4个自动化工作流，在推送代码或提交PR时自动运行。
+
+#### 工作流概览
+
+| 工作流 | 触发条件 | 功能 |
+|--------|---------|------|
+| **CI** | 推送/PR | 多Python版本(3.9-3.12) + 多平台(Ubuntu/Windows)测试 + 覆盖率报告 |
+| **Code Quality** | 推送/PR | flake8 + black + isort + mypy 代码质量检查 + 安全扫描 |
+| **Deploy** | main分支推送 | 自动构建发布包；打 `v*` tag时创建GitHub Release |
+| **Docs** | 推送/PR | 检查README存在性、依赖一致性、目录结构文档 |
+
+#### CI 工作流详情
+
+**多版本多平台测试：**
+
+```
+推送代码 → 检出代码 → 安装依赖 → 运行348个单元测试 → 生成覆盖率报告
+```
+
+- 支持 Python 3.9 / 3.10 / 3.11 / 3.12
+- 支持 Ubuntu 和 Windows 双平台
+- 覆盖率报告在 Python 3.11 + Ubuntu 上生成并上传
+
+**环境变量配置：**
+
+```yaml
+env:
+  LLM_PROVIDER: deepseek
+  LLM_API_KEY: test-key
+  LLM_BASE_URL: https://api.deepseek.com/v1
+  LLM_MODEL: deepseek-chat
+  PYTHONIOENCODING: utf-8  # 解决Windows中文编码问题
+```
+
+#### Code Quality 工作流详情
+
+**代码风格检查：**
+
+- `flake8`：语法错误和代码风格检查
+- `black`：代码格式化检查
+- `isort`：导入顺序检查
+- `mypy`：类型安全检查
+
+**安全扫描：**
+
+- `bandit`：Python代码安全漏洞扫描
+- `safety`：依赖库已知漏洞检查
+
+#### Deploy 工作流详情
+
+**构建流程：**
+
+```
+推送main → 安装依赖 → 运行测试 → python -m build → 上传dist/
+```
+
+**Release 发布（打tag时）：**
+
+```
+创建v* tag → 下载构建产物 → 创建GitHub Release（自动生成Release Notes）
+```
+
+#### 查看运行状态
+
+在 GitHub 仓库的 **Actions** 标签页可以查看所有工作流的运行状态和详细日志。
 
 ---
 
