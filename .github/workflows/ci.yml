@@ -42,6 +42,7 @@ jobs:
           LLM_API_KEY: test-key
           LLM_BASE_URL: https://api.deepseek.com/v1
           LLM_MODEL: deepseek-chat
+          PYTHONIOENCODING: utf-8
 
       - name: 生成测试覆盖率报告
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
@@ -50,6 +51,8 @@ jobs:
           coverage run -m unittest discover -s tests -p "test_*.py"
           coverage report -m
           coverage xml
+        env:
+          PYTHONIOENCODING: utf-8
 
       - name: 上传覆盖率报告
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'

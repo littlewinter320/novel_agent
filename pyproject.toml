@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novel-agent"
+version = "0.1.0"
+description = "网络文学小说创作Agent系统 - 基于多Agent架构的智能小说创作平台"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "littlewinter320"},
+]
+dependencies = [
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "openai>=1.0.0",
+    "anthropic>=0.18.0",
+    "python-docx>=0.8.11",
+    "ebooklib>=0.18",
+    "pdfplumber>=0.10.0",
+    "jieba>=0.42.1",
+]
+
+[project.optional-dependencies]
+screenshot = ["playwright>=1.40.0"]
+dev = ["pytest>=7.4.0", "coverage>=7.0"]
+
+[tool.setuptools.packages.find]
+include = ["agents*", "core*", "utils*", "templates*", "data*"]
+
+[tool.setuptools.package-data]
+templates = ["*.md"]
+data = ["genres/*.json"]
