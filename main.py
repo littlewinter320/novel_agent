@@ -70,6 +70,8 @@ class NovelAgentCLI:
     def __init__(self):
         self.llm_client = None
         self.running = False
+        self.conversation_history = []  # 对话历史记录
+        self.max_history_length = 20  # 最大历史记录条数（避免token超限）
         
     def initialize(self):
         """初始化系统"""
@@ -175,11 +177,21 @@ class NovelAgentCLI:
 
 现在用户正在和你对话，请根据他们的需求提供帮助。"""
             
-            # 调用LLM
+            # 调用LLM（传递对话历史）
             response = self.llm_client.chat_with_system(
                 system_prompt=system_prompt,
-                user_message=user_input
+                user_message=user_input,
+                history=self.conversation_history
             )
+            
+            # 保存对话历史
+            self.conversation_history.append({"role": "user", "content": user_input})
+            self.conversation_history.append({"role": "assistant", "content": response})
+            
+            # 限制历史记录长度
+            if len(self.conversation_history) > self.max_history_length * 2:
+                self.conversation_history = self.conversation_history[-self.max_history_length * 2:]
+            
             print(response)
         except Exception as e:
             print(f"错误:{e}")
