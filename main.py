@@ -71,7 +71,7 @@ class NovelAgentCLI:
         self.llm_client = None
         self.running = False
         self.conversation_history = []  # 对话历史记录
-        self.max_history_length = 20  # 最大历史记录条数（避免token超限）
+        self.max_history_length = float('inf')  # 无限对话记录
         
     def initialize(self):
         """初始化系统"""
