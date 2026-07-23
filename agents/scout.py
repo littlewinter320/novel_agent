@@ -2,23 +2,20 @@
 扫榜分析师(SubAgent-Scout)
 
 核心职责:
-- 根据用户提供的小说类型/题材，通过网络搜索获取当前热门作品数据
+- 根据用户提供的小说类型/题材，通过真实爬虫获取当前热门作品数据
+- 爬取数据自动入库，截图供Agent视觉分析
 - 分析3-5部对标作品的爆火特征（开篇钩子、爽点分布、人设套路、剧情模板、读者反馈）
+- 爆火写法特征自动记录到知识库
 - 输出结构化报告 + 针对性写法建议 + 推荐大纲框架
 
 工作流程:
-用户输入题材 → 调用web_search → 分析每部作品 → 提取共性特征 → 结合题材知识库 → 输出建议
+用户输入题材 → 爬虫获取真实数据 → 数据入库 → 截图 → 更新知识库 → 分析每部作品 → 提取共性特征 → 输出建议
 
 设计思路:
-- 采用"搜索-分析-总结"的三步策略
+- 优先使用真实爬虫获取数据，爬虫失败时降级为LLM搜索
+- 爬取的数据自动持久化到SQLite数据库
+- 爆火小说的写法特征自动更新到题材知识库
 - 分析维度：开篇钩子、爽点分布、人设套路、剧情模板、读者反馈
-- 输出格式：结构化报告，便于用户阅读和后续模块使用
-
-关键算法:
-- 网络搜索：使用LLM的web_search能力获取热门作品信息
-- 特征提取：从搜索结果中提取关键特征
-- 共性分析：对比多部作品，提取共性特征
-- 建议生成：基于共性特征和题材知识库生成针对性建议
 
 输出格式:
 {
@@ -26,7 +23,8 @@
     "feature_analysis": [特征分析结果],
     "common_features": [共性特征],
     "suggestions": [针对性建议],
-    "recommended_outline": [推荐大纲框架]
+    "recommended_outline": [推荐大纲框架],
+    "data_source": "crawl" | "llm"  # 数据来源标记
 }
 """
 
@@ -40,6 +38,10 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 from utils.llm_client import get_llm_client
+from utils.web_scraper import get_web_scraper
+from utils.screenshot_tool import get_screenshot_tool
+from utils.progress_display import get_progress_display
+from core.novel_database import get_novel_database
 from core.genre_knowledge import get_genre_knowledge_base
 
 
@@ -73,10 +75,16 @@ class ScoutAgent:
         初始化流程:
         1. 获取LLM客户端（用于搜索和分析）
         2. 获取题材知识库实例（用于查询题材规范）
-        3. 初始化分析缓存（避免重复分析）
+        3. 初始化爬虫、截图、数据库、进度显示模块
+        4. 初始化分析缓存（避免重复分析）
         """
         self.llm_client = get_llm_client()
         self.genre_knowledge_base = get_genre_knowledge_base()
+        # 新增模块：爬虫、截图、数据库、进度显示
+        self.web_scraper = get_web_scraper()
+        self.screenshot_tool = get_screenshot_tool()
+        self.novel_db = get_novel_database()
+        self.progress = get_progress_display()
         self._analysis_cache = {}
     
     def analyze_genre(self, genre: str, constraints: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -146,26 +154,125 @@ class ScoutAgent:
         
         return result
     
-    def search_hot_novels(self, genre: str, constraints: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    def search_hot_novels(self, genre: str, constraints: Dict[str, Any] = None, 
+                         platform: str = "番茄小说") -> List[Dict[str, Any]]:
         """
-        搜索热门作品
+        搜索热门作品（优先使用真实爬虫）
         
         实现逻辑:
-        1. 构造搜索提示词，要求LLM搜索当前热门的该题材作品
-        2. 调用LLM生成搜索结果
-        3. 解析JSON格式结果
+        1. 优先使用爬虫从指定平台获取真实数据
+        2. 爬取的数据自动入库保存
+        3. 爬虫失败时降级为LLM搜索
+        
+        Args:
+            genre: 题材名称
+            constraints: 用户约束条件
+            platform: 目标平台（默认番茄小说）
+        
+        Returns:
+            热门作品列表，每部作品包含：
+            - title: 作品名称
+            - author: 作者
+            - platform: 平台
+            - popularity: 热度指标
+            - brief: 简介
+            - tags: 标签列表
+            - url: 作品链接
+        """
+        # 尝试使用爬虫获取真实数据
+        crawled_novels = self._crawl_platform_data(platform, genre)
+        
+        if crawled_novels:
+            # 爬虫成功，保存数据到数据库
+            self._save_crawled_data(crawled_novels, platform, genre)
+            return crawled_novels
+        
+        # 爬虫失败，降级为LLM搜索
+        print(f"爬虫获取数据失败，使用LLM搜索模式...")
+        return self._llm_search_hot_novels(genre, constraints)
+    
+    def _crawl_platform_data(self, platform: str, genre: str) -> List[Dict[str, Any]]:
+        """
+        从指定平台爬取热门小说数据
+        
+        Args:
+            platform: 平台名称
+            genre: 题材名称
+        
+        Returns:
+            爬取到的小说列表，失败返回空列表
+        """
+        try:
+            self.progress.start_task(f"正在从{platform}爬取{genre}类热门小说...", total=1)
+            
+            # 调用爬虫模块
+            crawl_result = self.web_scraper.crawl_platform(platform, genre, limit=10)
+            
+            if "error" in crawl_result:
+                self.progress.fail_task(f"爬取失败: {crawl_result['error']}")
+                return []
+            
+            novels = crawl_result.get("novels", [])
+            self.progress.complete_task(f"成功获取{len(novels)}部小说数据")
+            
+            # 截图保存（可选）
+            if crawl_result.get("url"):
+                try:
+                    screenshot_result = self.screenshot_tool.take_screenshot(
+                        crawl_result["url"],
+                        filename=f"{platform}_{genre}_ranking"
+                    )
+                    if "error" not in screenshot_result:
+                        print(f"页面截图已保存: {screenshot_result.get('screenshot_path')}")
+                except Exception as e:
+                    print(f"截图失败（非关键功能）: {e}")
+            
+            return novels
+            
+        except Exception as e:
+            print(f"爬取平台数据失败: {e}")
+            return []
+    
+    def _save_crawled_data(self, novels: List[Dict[str, Any]], platform: str, genre: str):
+        """
+        保存爬取的数据到数据库
+        
+        Args:
+            novels: 小说列表
+            platform: 平台名称
+            genre: 题材名称
+        """
+        try:
+            saved_count = 0
+            for novel in novels:
+                # 补充平台和题材信息
+                novel["platform"] = platform
+                novel["genre"] = genre
+                
+                # 保存到数据库
+                novel_id = self.novel_db.save_novel(novel)
+                if novel_id > 0:
+                    saved_count += 1
+            
+            # 记录爬取日志
+            crawl_url = f"https://{platform}.com/rank/{genre}"
+            self.novel_db.log_crawl(platform, genre, crawl_url, "success", f"爬取{len(novels)}部小说", len(novels))
+            
+            print(f"数据入库完成: 新增/更新{saved_count}部小说")
+            
+        except Exception as e:
+            print(f"保存爬取数据失败: {e}")
+    
+    def _llm_search_hot_novels(self, genre: str, constraints: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+        """
+        使用LLM搜索热门作品（降级方案）
         
         Args:
             genre: 题材名称
             constraints: 用户约束条件
         
         Returns:
-            热门作品列表，每部作品包含：
-            - title: 作品名称
-            - author: 作者
-            - platform: 平台（如起点、晋江等）
-            - popularity: 热度指标
-            - brief: 简介
+            热门作品列表
         """
         # 构造约束文本
         constraints_text = ""
@@ -186,7 +293,8 @@ class ScoutAgent:
     "author": "作者",
     "platform": "平台（如起点中文网、晋江文学城等）",
     "popularity": "热度指标（如月票数、收藏数、评分等）",
-    "brief": "作品简介（100字以内）"
+    "brief": "作品简介（100字以内）",
+    "tags": ["标签列表"]
 }}
 
 只返回JSON数组，不要其他内容。"""
@@ -196,7 +304,7 @@ class ScoutAgent:
             hot_novels = json.loads(response)
             return hot_novels if isinstance(hot_novels, list) else []
         except Exception as e:
-            print(f"搜索热门作品失败: {e}")
+            print(f"LLM搜索热门作品失败: {e}")
             return []
     
     def extract_features(self, novel: Dict[str, Any], genre: str) -> Dict[str, Any]:

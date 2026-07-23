@@ -24,6 +24,7 @@
 本系统采用"控制面与创作面分离"的多Agent架构，通过Main Agent统一调度6个专业化子Agent，实现网络小说创作的智能化和自动化。
 
 **核心原则：**
+
 - 循序渐进：每个步骤只输出当前阶段内容，不提前暴露后续步骤
 - 用户至上：用户可随时修改前面的步骤，系统记忆修改并影响后续步骤
 - 主动判断：自动识别用户需求，路由到对应功能
@@ -36,6 +37,7 @@
 ```
 
 **7步创作流程：**
+
 1. 扫榜分析（Scout Agent）
 2. 大纲规划（Architect Agent）
 3. 章节生成（Writer Agent）
@@ -61,11 +63,13 @@
 ### 2. 智能记忆系统
 
 **三层记忆架构：**
+
 - **热记忆**：当前会话上下文（内存）
 - **温记忆**：跨会话核心信息（JSON持久化）
 - **冷记忆**：历史摘要压缩存储（按章节索引）
 
 **3个记忆点：**
+
 - 记忆点1：用户约束条件（如"不要后宫"、"必须HE"）
 - 记忆点2：用户修改记录（用于学习偏好）
 - 记忆点3：工作进度（各步骤完成情况）
@@ -73,6 +77,7 @@
 ### 3. 真相文件体系
 
 7个核心事实文件，确保创作一致性：
+
 - 世界状态文件：世界观、规则、设定
 - 角色矩阵文件：角色信息、关系、状态
 - 时间线文件：事件时间顺序
@@ -84,6 +89,7 @@
 ### 4. 质量保障机制
 
 **Quality Gate 6维度检查：**
+
 1. 逻辑完整性
 2. 信息完整性
 3. 用户修改记忆
@@ -92,6 +98,7 @@
 6. 一致性检查
 
 **审计员15维度检查：**
+
 - 角色OOC、时间线、战力、伏笔、认知边界
 - 物品、世界规则、关系、风格、节奏
 - 爽点、结尾钩子、AI味、剧情推进、读者体验
@@ -109,6 +116,22 @@
 - 版本比较和回滚
 - 混合版本生成
 - 检查点管理
+
+### 7. 实时数据爬取与分析
+
+- **多平台爬虫**：支持番茄小说、起点中文网、七猫小说三大平台
+- **智能意图识别**：自动检测用户是否需要爬取数据，无需显式命令
+- **数据持久化**：爬取的小说数据自动存入SQLite数据库，支持去重和增量更新
+- **可视化截图**：基于Playwright的网页截图功能，记录爬取页面的视觉信息
+- **进度反馈**：实时显示任务执行进度，让用户了解Agent在做什么
+- **知识库自动更新**：爆火小说的写法特征自动提取并更新到题材知识库
+
+### 8. 进度反馈系统
+
+- **实时状态显示**：每个操作都显示进度条和状态信息
+- **颜色编码**：成功（绿色）、失败（红色）、警告（黄色）
+- **任务追踪**：记录所有任务的执行历史和耗时
+- **用户友好**：清晰的图标和消息，让用户随时了解系统状态
 
 ---
 
@@ -134,7 +157,7 @@ novel_agent/
 │   ├── revisor.py            # 修订员
 │   └── style_engineer.py     # 文风工程师
 │
-├── core/                      # 核心功能模块（28个）
+├── core/                      # 核心功能模块（29个）
 │   ├── main_agent.py         # 主协调器
 │   ├── session_state.py      # 会话状态管理
 │   ├── truth_files.py        # 真相文件体系
@@ -163,11 +186,15 @@ novel_agent/
 │   ├── trend_refresher.py    # 热点刷新器
 │   ├── style_learner.py      # 风格学习器
 │   ├── silent_modification_detector.py # 隐性修改检测
-│   └── dialogue_database.py  # 对话数据库
+│   ├── dialogue_database.py  # 对话数据库
+│   └── novel_database.py     # 小说数据库（爬取数据持久化）
 │
 ├── utils/                     # 工具模块
 │   ├── llm_client.py         # LLM客户端（多提供商支持）
-│   └── llm_cache.py          # LLM缓存机制
+│   ├── llm_cache.py          # LLM缓存机制
+│   ├── web_scraper.py        # 网页爬虫（多平台支持）
+│   ├── screenshot_tool.py    # 截图工具（Playwright）
+│   └── progress_display.py   # 进度反馈系统
 │
 ├── templates/                 # Prompt模板
 │   ├── scout_prompt.md
@@ -198,7 +225,9 @@ novel_agent/
 │   ├── memory/               # 记忆系统数据
 │   ├── skills/               # Skill库
 │   ├── versions/             # 版本快照
-│   └── checkpoints/          # 检查点
+│   ├── checkpoints/          # 检查点
+│   ├── screenshots/          # 网页截图（Playwright生成）
+│   └── novels.db             # SQLite数据库（爬取的小说数据）
 │
 └── tests/                     # 单元测试（348个测试）
     ├── test_main_agent.py
@@ -255,6 +284,7 @@ novel_agent/
 **文件位置：** `core/main_agent.py`
 
 **核心职责：**
+
 - 意图识别：通过关键词匹配和LLM辅助识别用户意图
 - 流程控制：基于SessionState控制7步工作流程
 - SubAgent调度：根据意图路由到对应的SubAgent
@@ -262,6 +292,7 @@ novel_agent/
 - 状态持久化：每次操作后保存状态，支持断点续传
 
 **意图识别：**
+
 ```python
 INTENT_KEYWORDS = {
     Intent.ANALYZE_TRENDS: ["分析", "调研", "爆火", "热门", "写法", "趋势", "扫榜"],
@@ -278,11 +309,13 @@ INTENT_KEYWORDS = {
 **文件位置：** `agents/scout.py`
 
 **核心职责：**
+
 - 根据用户提供的小说类型/题材，通过网络搜索获取当前热门作品数据
 - 分析3-5部对标作品的爆火特征
 - 输出结构化报告 + 针对性写法建议 + 推荐大纲框架
 
 **分析维度：**
+
 1. 开篇钩子：前3章如何吸引读者
 2. 爽点分布：爽点如何分布，每隔多少章一个爽点
 3. 人设套路：主角和配角的人设特点
@@ -290,6 +323,7 @@ INTENT_KEYWORDS = {
 5. 读者反馈：读者最喜欢什么，最吐槽什么
 
 **输出格式：**
+
 ```json
 {
     "hot_novels": [热门作品列表],
@@ -305,6 +339,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `agents/architect.py`
 
 **核心职责：**
+
 - 需求澄清：通过结构化提问确认所有关键参数
 - 分层大纲生成：总纲层 → 卷纲层 → 弧纲层 → 章节规划
 - Compass机制：只详细规划前2卷+当前弧，后续卷保留骨架
@@ -313,6 +348,7 @@ INTENT_KEYWORDS = {
 - 局部修改：修改某一层时只重新生成受影响的部分
 
 **Compass滚动规划：**
+
 ```
 总纲（完整）
   ├─ 卷1（详细规划）
@@ -323,6 +359,7 @@ INTENT_KEYWORDS = {
 ```
 
 **伏笔生命周期：**
+
 ```
 未埋设 → 已埋设 → 积累中 → 已触发 → 已回收
 ```
@@ -332,6 +369,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `agents/writer.py`
 
 **核心职责：**
+
 - 根据章节规划 + 真相文件 + 风格指南 + 题材禁忌，生成章节正文
 - 内置25条通用写作规则
 - 每章生成前输出"自检表"，生成后输出"结算表"
@@ -339,6 +377,7 @@ INTENT_KEYWORDS = {
 **25条通用写作规则：**
 
 **人物塑造（5条）：**
+
 1. 角色行为必须符合其性格设定，避免OOC
 2. 对话要体现角色个性，不同角色说话风格应有区别
 3. 角色成长要有渐进性，避免突变
@@ -374,6 +413,7 @@ INTENT_KEYWORDS = {
 25. 注意题材禁忌
 
 **输出格式：**
+
 ```json
 {
     "self_check": {
@@ -397,6 +437,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `agents/auditor.py`
 
 **核心职责：**
+
 - 从15个维度检查章节内容一致性
 - 集成Humanizer-zh去AI化检测功能
 - 输出审计报告（每个维度PASS/FAIL + 具体问题描述 + 修正方向）
@@ -420,6 +461,7 @@ INTENT_KEYWORDS = {
 15. **读者体验检查**：检查读者阅读体验
 
 **AI味禁用清单（15种）：**
+
 - "首先...其次...最后"
 - "值得一提的是"
 - "需要注意的是"
@@ -437,6 +479,7 @@ INTENT_KEYWORDS = {
 - "一方面...另一方面"
 
 **输出格式：**
+
 ```json
 {
     "audit_results": [
@@ -464,12 +507,14 @@ INTENT_KEYWORDS = {
 **文件位置：** `agents/revisor.py`
 
 **核心职责：**
+
 - 根据审计报告进行定点修复
 - 只修改有问题的段落，不全章重写
 - 实现最多3轮审计-修订循环
 - 3轮后仍不通过则暂停，输出问题摘要等待用户介入
 
 **修订流程：**
+
 ```
 审计报告 → 定位问题段落 → 定点修复 → 重新审计
     ↓                                    ↓
@@ -485,12 +530,14 @@ INTENT_KEYWORDS = {
 **文件位置：** `agents/style_engineer.py`
 
 **核心职责：**
+
 - 分析参考文本的写作风格
 - 提取文笔指纹（句式长度分布、对话占比、心理描写占比、常用词汇等）
 - 生成风格指南文件（JSON格式，包含"必须做"和"禁止做"清单）
 - 实现"轻微改动"原则：70%保持原有风格，30%适应用户偏好
 
 **文笔指纹：**
+
 ```json
 {
     "sentence_length_distribution": {
@@ -515,6 +562,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/truth_files.py`
 
 **7个核心事实文件：**
+
 1. `world_state.json`：世界状态（世界观、规则、设定）
 2. `character_matrix.json`：角色矩阵（角色信息、关系、状态）
 3. `timeline.json`：时间线（事件时间顺序）
@@ -524,6 +572,7 @@ INTENT_KEYWORDS = {
 7. `plot_progress.json`：剧情推进（主线、支线进展）
 
 **交叉验证：**
+
 - 角色行为 vs 角色矩阵
 - 事件时间 vs 时间线
 - 伏笔状态 vs 伏笔钩子
@@ -534,11 +583,13 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/genre_knowledge.py`
 
 **支持15种题材：**
+
 - 玄幻、仙侠、都市、历史、科幻
 - 游戏、悬疑、言情、现言、古言
 - 穿越、重生、系统流、宫斗、宅斗
 
 **每个题材包含：**
+
 - 核心元素
 - 常见套路
 - 读者期待
@@ -546,21 +597,101 @@ INTENT_KEYWORDS = {
 - 禁忌清单
 - 热门梗
 
+**知识库自动更新机制：**
+
+系统会在以下场景自动更新知识库：
+
+1. **爬取热门小说后**（自动触发）
+   - 从爬取的小说数据中提取写法特征
+   - 分析爆火元素的共性模式
+   - 更新对应题材的 `hot_topics`（热点话题）和 `common_tropes`（常见套路）
+   - 更新 `last_updated` 时间戳
+
+2. **分析完成后**
+   - 从分析结果中提取新的写作技巧
+   - 识别读者反馈中的高频评价
+   - 更新 `hot_topics` 字段
+
+**更新流程：**
+```
+爬取数据 → LLM分析提取特征 → 更新知识库JSON文件 → 自动热加载
+```
+
+**实际更新逻辑（在 main.py 中）：**
+```python
+# 获取现有题材数据
+existing = self.genre_kb.get_genre(genre)
+if existing:
+    # 更新热点信息和常见套路
+    existing["hot_topics"] = features.get("hot_writing_features", [])
+    existing["common_tropes"] = features.get("popular_tropes", existing.get("common_tropes", []))
+    existing["last_updated"] = str(datetime.now())
+    self.genre_kb.update_genre(genre, existing)
+else:
+    # 创建新题材（包含完整字段）
+    new_genre = {
+        "name": genre,
+        "tags": list(set(tag for n in novels for tag in n.get("tags", []))),
+        "writing_style": features.get("hot_writing_features", [""]),
+        "plot_systems": features.get("popular_tropes", []),
+        "character_templates": features.get("character_archetypes", []),
+        "common_tropes": features.get("popular_tropes", []),
+        "hot_topics": features.get("hot_writing_features", []),
+        "last_updated": str(datetime.now())
+    }
+    self.genre_kb.add_genre(genre, new_genre)
+```
+
+**手动更新知识库：**
+```python
+from core.genre_knowledge import get_genre_knowledge_base
+
+kb = get_genre_knowledge_base()
+
+# 更新现有题材
+genre_data = kb.get_genre("玄幻")
+if genre_data:
+    genre_data["hot_topics"] = ["新的热点1", "新的热点2"]
+    genre_data["last_updated"] = "2024-01-15T10:30:00"
+    kb.update_genre("玄幻", genre_data)
+
+# 添加新题材
+new_genre = {
+    "name": "新题材",
+    "tags": ["标签1", "标签2"],
+    "writing_style": "写作风格描述",
+    "hot_topics": ["热点1", "热点2"],
+    "last_updated": "2024-01-15T10:30:00"
+}
+kb.add_genre("新题材", new_genre)
+
+# 强制重新加载所有题材文件
+kb.reload()
+```
+
+**热更新机制：**
+- 每次查询前自动检测文件修改时间
+- 文件被修改后自动重新加载，无需重启程序
+- 支持增量更新：只重新加载变化的文件
+
 #### 8.3 三层记忆系统（MemorySystem）
 
 **文件位置：** `core/memory_system.py`
 
 **热记忆（Hot Memory）：**
+
 - 当前会话上下文
 - 存储在内存中
 - 会话结束后转入温记忆
 
 **温记忆（Warm Memory）：**
+
 - 跨会话的核心信息
 - 持久化到 `data/memory/warm_memory.json`
 - 包含：用户画像、知识库索引、Skill索引
 
 **冷记忆（Cold Memory）：**
+
 - 历史摘要压缩存储
 - 按章节索引
 - 持久化到 `data/memory/cold_memory/`
@@ -570,6 +701,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/quality_gate.py`
 
 **6维度检查：**
+
 1. 逻辑完整性
 2. 信息完整性
 3. 用户修改记忆
@@ -578,6 +710,7 @@ INTENT_KEYWORDS = {
 6. 一致性检查
 
 **PASS/FAIL判定：**
+
 - 所有维度通过 → PASS
 - 任一维度失败 → FAIL，返回上一步重新规划
 
@@ -586,11 +719,13 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/foreshadow_tracker.py`
 
 **伏笔生命周期：**
+
 ```
 未埋设 → 已埋设 → 积累中 → 已触发 → 已回收 → 已放弃
 ```
 
 **健康度检查：**
+
 - 活跃伏笔不超过10个
 - 超过预计回收章节5章仍未触发 → 警告
 - 埋设后超过5章未提及 → 警告
@@ -600,6 +735,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/character_manager.py`
 
 **角色状态快照：**
+
 ```json
 {
     "character_id": "主角ID",
@@ -623,6 +759,7 @@ INTENT_KEYWORDS = {
 ```
 
 **一致性检查：**
+
 - 行为符合性格
 - 对话符合风格
 - 能力不突变
@@ -633,6 +770,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/version_manager.py`
 
 **功能：**
+
 - 版本快照保存
 - 版本比较
 - 版本回滚
@@ -643,6 +781,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/batch_coordinator.py`
 
 **功能：**
+
 - 逐章生成 → 审计 → 更新真相文件 → 下一章
 - 跨章一致性检查
 - 单章失败时只重写该章
@@ -652,6 +791,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/expression_variants.py`
 
 **功能：**
+
 - 常见词汇的多种表达方式
 - 重复检测：统计最近10章的词汇使用频率
 - 建议替换：检测到重复时提供替代方案
@@ -661,6 +801,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/meme_library.py`
 
 **功能：**
+
 - 分类管理流行梗（打脸梗、升级梗、感情梗等）
 - 新鲜度追踪：记录使用时间和章节
 - 组合创新：梗的组合使用
@@ -670,6 +811,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/structure_templates.py`
 
 **功能：**
+
 - 章节结构模板（正叙型、倒叙型、多线型等）
 - 结尾钩子模板（悬念型、反转型、情感型等）
 - 节奏变化规则
@@ -679,12 +821,14 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/trend_refresher.py`
 
 **触发条件：**
+
 - 每生成10-25章
 - 进入新篇章/新卷
 - 用户主动要求
 - 检测到梗/词汇超过20章未更新
 
 **功能：**
+
 - 搜索当前热门内容
 - 更新梗库和表达变体库
 - 生成"热点更新报告"
@@ -694,15 +838,18 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/style_learner.py`
 
 **3个学习渠道：**
+
 1. 用户上传的参考文本
 2. 用户对生成内容的修改
 3. 用户的对话风格
 
 **"轻微改动"原则：**
+
 - 70%保持原有风格多样性
 - 30%适应用户偏好
 
 **学习报告：**
+
 - 每10章输出一次风格学习报告
 
 #### 8.14 隐性修改检测器（SilentModificationDetector）
@@ -710,12 +857,14 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/silent_modification_detector.py`
 
 **4种检测手段：**
+
 1. 文件变更检测（修改时间对比）
 2. 对话中的修改意图检测（关键词/模式匹配）
 3. 生成前一致性检查（真相文件 vs 实际内容）
 4. 用户主动同步命令
 
 **检测到异常时：**
+
 - 主动确认
 - 提供[A][B][C]选项
 
@@ -724,12 +873,14 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/ambiguity_detector.py`
 
 **4种检测规则：**
+
 1. 信息不完整（缺少关键参数）
 2. 信息有歧义（多种理解）
 3. 信息与之前矛盾
 4. 信息太模糊
 
 **提问格式：**
+
 ```
 [A] 选项1
 [B] 选项2
@@ -742,6 +893,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/de_ai_checker.py`
 
 **功能：**
+
 - 维护"AI味禁用清单"（15种常见AI句式）
 - 审计时自动统计
 - 超标则不通过
@@ -751,12 +903,14 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/diversity_report.py`
 
 **统计内容：**
+
 - 词汇使用频率
 - 句式分布
 - 梗使用分布
 - 结构分布
 
 **功能：**
+
 - 定期输出报告
 - 提醒"过度使用"的元素
 
@@ -765,12 +919,14 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/file_importer.py`
 
 **支持格式：**
+
 - .docx（Word文档）
 - .pdf（PDF文档）
 - .txt（纯文本）
 - .md（Markdown）
 
 **功能：**
+
 - 提取元数据
 - 提取角色信息
 - 提取事件
@@ -783,11 +939,13 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/exporter.py`
 
 **支持格式：**
+
 - TXT（每章一个文件）
 - Markdown（带格式）
 - EPUB（电子书）
 
 **功能：**
+
 - 自动过滤内部工件（自检表、结算表、审计报告等）
 
 #### 8.20 诊断工具（DiagnosticTool）
@@ -795,6 +953,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/diagnostic_tool.py`
 
 **功能：**
+
 - 生成系统状态报告
 - 健康检查
 - 导出诊断报告
@@ -804,6 +963,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/skill_library.py`
 
 **Skill数据结构：**
+
 ```json
 {
     "skill_id": "技能ID",
@@ -822,6 +982,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/skill_engine.py`
 
 **功能：**
+
 - 自动创建Skill（完成复杂任务后封装为可复用Skill）
 - 使用中自改进（记录效果反馈，连续不满意则自动调整）
 - Skill检索（新任务开始时自动检索匹配的Skill）
@@ -831,6 +992,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/user_profile.py`
 
 **属性：**
+
 - preferences：偏好
 - writing_habits：写作习惯
 - modification_history：修改历史
@@ -841,6 +1003,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/session_state.py`
 
 **功能：**
+
 - 持久化到 `data/session_state.json`
 - 记录当前工作进度
 - 记录用户约束
@@ -851,6 +1014,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/checkpoint_manager.py`
 
 **功能：**
+
 - 自动checkpoint（关键步骤完成后自动保存）
 - 手动checkpoint（用户主动保存）
 - 从checkpoint恢复
@@ -860,6 +1024,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/modification_tracker.py`
 
 **功能：**
+
 - 记录修改内容
 - 评估影响范围
 - 支持部分回滚
@@ -869,6 +1034,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/dialogue_database.py`
 
 **功能：**
+
 - 记录对话历史
 - 分析对话模式
 - 提供对话建议
@@ -878,6 +1044,7 @@ INTENT_KEYWORDS = {
 **文件位置：** `core/prompt_loader.py`
 
 **功能：**
+
 - 加载6个SubAgent的Prompt模板
 - 动态填充参数
 - 支持模板继承
@@ -916,6 +1083,7 @@ pip install -r requirements.txt
 ```
 
 **主要依赖：**
+
 - `openai`：OpenAI兼容API客户端
 - `anthropic`：Claude API客户端
 - `python-docx`：Word文档处理
@@ -923,17 +1091,41 @@ pip install -r requirements.txt
 - `ebooklib`：EPUB电子书生成
 - `bm25s`：文本检索
 - `jieba`：中文分词
+- `requests`：HTTP请求（爬虫模块）
+- `beautifulsoup4`：HTML解析（爬虫模块）
+
+**可选依赖（截图功能）：**
+
+- `playwright`：浏览器自动化工具（用于网页截图）
+
+**安装 Playwright（如需截图功能）：**
+
+```bash
+# 安装 playwright 库
+pip install playwright
+
+# 安装浏览器（必须执行，会下载 Chromium 等浏览器）
+playwright install chromium
+```
+
+**注意：**
+
+- Playwright 仅用于截图功能，不影响核心功能
+- 未安装 Playwright 时，系统会优雅降级，跳过截图步骤
+- 首次运行 `playwright install` 需要下载浏览器，可能需要几分钟
 
 #### 4. 配置API密钥
 
 **方式一：使用环境变量（推荐）**
 
 复制环境变量示例文件：
+
 ```bash
 cp .env.example .env
 ```
 
 编辑 `.env` 文件：
+
 ```bash
 # DeepSeek配置示例
 LLM_PROVIDER=deepseek
@@ -947,6 +1139,7 @@ LLM_MAX_TOKENS=8192
 **方式二：直接修改config.py**
 
 编辑 `config.py`：
+
 ```python
 LLM_PROVIDER = "deepseek"
 LLM_MODEL = "deepseek-chat"
@@ -958,13 +1151,13 @@ LLM_MAX_TOKENS = 8192
 
 **支持的LLM提供商：**
 
-| 提供商 | LLM_PROVIDER | LLM_MODEL | LLM_BASE_URL |
-|--------|--------------|-----------|--------------|
-| Kimi | kimi | kimi-k2.5 | https://api.moonshot.cn/v1 |
-| DeepSeek | deepseek | deepseek-chat | https://api.deepseek.com/v1 |
-| 智谱GLM | glm | glm-4 | https://open.bigmodel.cn/api/paas/v4 |
-| OpenAI | openai | gpt-4 | https://api.openai.com/v1 |
-| Claude | claude | claude-3-5-sonnet-20241022 | （无需base_url） |
+| 提供商   | LLM_PROVIDER | LLM_MODEL                  | LLM_BASE_URL                         |
+| -------- | ------------ | -------------------------- | ------------------------------------ |
+| Kimi     | kimi         | kimi-k2.5                  | https://api.moonshot.cn/v1           |
+| DeepSeek | deepseek     | deepseek-chat              | https://api.deepseek.com/v1          |
+| 智谱GLM  | glm          | glm-4                      | https://open.bigmodel.cn/api/paas/v4 |
+| OpenAI   | openai       | gpt-4                      | https://api.openai.com/v1            |
+| Claude   | claude       | claude-3-5-sonnet-20241022 | （无需base_url）                     |
 
 #### 5. 运行测试
 
@@ -973,6 +1166,7 @@ python -m unittest discover -s tests -p "test_*.py"
 ```
 
 应看到：
+
 ```
 Ran 348 tests in X.XXXs
 OK
@@ -985,13 +1179,17 @@ python main.py
 ```
 
 看到以下输出表示启动成功：
+
 ```
 小说创作Agent系统
 连接AI服务...
 连接成功
+初始化爬虫模块...
+初始化截图模块...
+初始化数据库...
 
-功能：1.分析爆火小说 2.规划大纲 3.生成章节 4.导入文件
-命令：help-帮助 quit-退出 status-状态
+功能：1.分析爆火小说 2.规划大纲 3.生成章节 4.导入文件 5.爬取平台数据
+命令：help-帮助 quit-退出 status-状态 crawl-爬取
 >
 ```
 
@@ -1013,11 +1211,13 @@ test / 测试             # 测试API连接
 #### 步骤1：扫榜分析
 
 **输入示例：**
+
 ```
 > 我想写一本玄幻小说，帮我分析一下当前爆火的玄幻小说
 ```
 
 **系统响应：**
+
 1. Scout Agent搜索当前热门玄幻小说
 2. 分析3-5部对标作品的爆火特征
 3. 输出结构化报告：
@@ -1030,11 +1230,13 @@ test / 测试             # 测试API连接
 #### 步骤2：大纲规划
 
 **输入示例：**
+
 ```
 > 根据刚才的分析，帮我规划一个玄幻大纲
 ```
 
 **系统响应：**
+
 1. Architect Agent进行需求澄清（如有缺失参数）
 2. 生成分层大纲：
    - 总纲（整体剧情走向）
@@ -1045,6 +1247,7 @@ test / 测试             # 测试API连接
 3. 每层都需要用户确认
 
 **Compass滚动规划：**
+
 - 只详细规划前2卷+当前弧
 - 后续卷保留骨架
 - 每完成一卷自动展开下一卷
@@ -1052,11 +1255,13 @@ test / 测试             # 测试API连接
 #### 步骤3：章节生成
 
 **输入示例：**
+
 ```
 > 开始生成第1章
 ```
 
 **系统响应：**
+
 1. Writer Agent生成自检表（本章涉及的角色、伏笔、爽点）
 2. 用户确认自检表
 3. 生成章节正文
@@ -1066,6 +1271,7 @@ test / 测试             # 测试API连接
 #### 步骤4：质量审计
 
 **系统自动执行：**
+
 1. Auditor Agent从15个维度检查章节
 2. 生成审计报告
 3. 如有问题，交给Revisor Agent修订
@@ -1075,11 +1281,13 @@ test / 测试             # 测试API连接
 #### 步骤5：批量生成
 
 **输入示例：**
+
 ```
 > 批量生成第1-10章
 ```
 
 **系统响应：**
+
 1. Batch Coordinator逐章生成
 2. 每章生成后自动审计
 3. 更新真相文件
@@ -1091,11 +1299,13 @@ test / 测试             # 测试API连接
 #### 导入已有小说
 
 **输入示例：**
+
 ```
 > 导入文件 path/to/novel.docx
 ```
 
 **系统响应：**
+
 1. FileImporter提取元数据、角色、事件、伏笔
 2. 分析文笔指纹
 3. 自动注入真相文件体系
@@ -1104,6 +1314,7 @@ test / 测试             # 测试API连接
 #### 版本管理
 
 **输入示例：**
+
 ```
 > 查看版本历史
 > 回滚到版本v2
@@ -1111,18 +1322,21 @@ test / 测试             # 测试API连接
 ```
 
 **系统响应：**
+
 1. VersionManager提供版本管理功能
 2. 支持版本比较、回滚、混合版本生成
 
 #### 风格学习
 
 **输入示例：**
+
 ```
 > 学习这个参考文本的风格 path/to/reference.txt
 > 查看风格学习报告
 ```
 
 **系统响应：**
+
 1. StyleLearner分析参考文本
 2. 提取文笔指纹
 3. 生成风格指南
@@ -1131,6 +1345,7 @@ test / 测试             # 测试API连接
 #### 查询知识库
 
 **输入示例：**
+
 ```
 > 查看当前角色列表
 > 查看伏笔状态
@@ -1138,12 +1353,14 @@ test / 测试             # 测试API连接
 ```
 
 **系统响应：**
+
 1. 从真相文件体系查询信息
 2. 返回结构化数据
 
 #### 导出小说
 
 **输入示例：**
+
 ```
 > 导出为TXT
 > 导出为Markdown
@@ -1151,9 +1368,72 @@ test / 测试             # 测试API连接
 ```
 
 **系统响应：**
+
 1. Exporter过滤内部工件
 2. 生成指定格式文件
 3. 保存到输出目录
+
+#### 爬取热门小说（新功能）
+
+**输入示例：**
+
+```
+> 查看番茄小说的玄幻类热门作品
+> 分析起点中文网的都市类爆款小说
+> 爬取七猫小说的仙侠类排行榜
+```
+
+**系统响应：**
+
+1. 自动识别平台和题材
+2. 显示实时进度：
+   ```
+   ● 开始: 正在从番茄小说爬取玄幻类热门小说...
+   ✓ 完成: 正在从番茄小说爬取玄幻类热门小说... (2.3s)
+     成功获取10部小说数据
+   ● 开始: 正在截取页面...
+   ✓ 完成: 正在截取页面... (1.5s)
+     截图已保存: data/screenshots/fanqie_xuanhuan_20240115_143022.png
+   ● 开始: 正在分析爆火特征并更新知识库...
+   ✓ 完成: 正在分析爆火特征并更新知识库... (3.2s)
+     知识库已更新
+   ```
+3. 数据自动入库（SQLite数据库）
+4. 截图保存到 `data/screenshots/`
+5. 知识库自动更新爆火特征
+6. 生成分析报告
+
+**支持的平台：**
+
+- 番茄小说（fanqie）
+- 起点中文网（qidian）
+- 七猫小说（qimao）
+
+**支持的题材：**
+
+- 都市、玄幻、仙侠、科幻、游戏、悬疑
+
+**截图功能说明：**
+
+- 需要安装 Playwright：`pip install playwright && playwright install chromium`
+- 未安装 Playwright 时，系统会跳过截图步骤，不影响其他功能
+- 截图文件命名格式：`{平台}_{题材}_{日期}_{时间}.png`
+- 截图保存位置：`data/screenshots/`
+
+#### 显式爬取命令
+
+**输入示例：**
+
+```
+> crawl 番茄 玄幻
+> crawl 起点 都市
+> screenshot https://fanqienovel.com
+```
+
+**系统响应：**
+
+- `crawl` 命令：直接爬取指定平台和题材
+- `screenshot` 命令：对指定URL进行截图
 
 ---
 
@@ -1176,6 +1456,7 @@ LLM_MAX_TOKENS = 8192  # 最大输出token数
 ```
 
 **注意：** 不同模型有不同的参数限制
+
 - kimi-k2.5: temperature只支持1.0，max_tokens最大131077
 - deepseek-chat: max_tokens最大65536
 - glm-4: max_tokens最大4096
@@ -1321,12 +1602,15 @@ WARM_MEMORY_FILE = os.path.join(MEMORY_DIR, "warm_memory.json")
 #### 1. 环境准备
 
 **Python安装：**
+
 - 下载Python 3.8+：https://www.python.org/downloads/
 - 安装时勾选"Add Python to PATH"
 
 **Git安装：**
+
 - 下载Git：https://git-scm.com/downloads
 - 安装后配置用户名和邮箱：
+
 ```bash
 git config --global user.name "Your Name"
 git config --global user.email "your.email@example.com"
@@ -1342,11 +1626,13 @@ cd novel_agent
 #### 3. 虚拟环境
 
 **创建虚拟环境：**
+
 ```bash
 python -m venv .venv
 ```
 
 **激活虚拟环境：**
+
 ```bash
 # Windows
 .venv\Scripts\activate
@@ -1356,6 +1642,7 @@ source .venv/bin/activate
 ```
 
 **退出虚拟环境：**
+
 ```bash
 deactivate
 ```
@@ -1367,6 +1654,7 @@ pip install -r requirements.txt
 ```
 
 **依赖说明：**
+
 ```txt
 openai>=1.0.0          # OpenAI兼容API客户端
 anthropic>=0.8.0       # Claude API客户端
@@ -1382,11 +1670,13 @@ jieba>=0.42.1          # 中文分词
 **方式一：环境变量（推荐）**
 
 创建 `.env` 文件：
+
 ```bash
 cp .env.example .env
 ```
 
 编辑 `.env`：
+
 ```bash
 LLM_PROVIDER=deepseek
 LLM_MODEL=deepseek-chat
@@ -1399,6 +1689,7 @@ LLM_MAX_TOKENS=8192
 **方式二：直接修改config.py**
 
 编辑 `config.py`：
+
 ```python
 LLM_PROVIDER = "deepseek"
 LLM_MODEL = "deepseek-chat"
@@ -1413,6 +1704,7 @@ python -m unittest discover -s tests -p "test_*.py"
 ```
 
 应看到：
+
 ```
 Ran 348 tests in X.XXXs
 OK
@@ -1429,12 +1721,14 @@ python main.py
 #### 1. 服务器要求
 
 **最低配置：**
+
 - CPU: 2核
 - 内存: 4GB
 - 硬盘: 20GB
 - 网络: 稳定的互联网连接（用于调用LLM API）
 
 **推荐配置：**
+
 - CPU: 4核+
 - 内存: 8GB+
 - 硬盘: 50GB+
@@ -1517,6 +1811,7 @@ WantedBy=multi-user.target
 ```
 
 启动服务：
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable novel-agent
@@ -1527,13 +1822,17 @@ sudo systemctl status novel-agent
 #### 4. 数据备份
 
 **定期备份以下目录：**
+
 - `data/truth/`：真相文件
 - `data/memory/`：记忆系统数据
 - `data/skills/`：Skill库
 - `data/versions/`：版本快照
 - `data/checkpoints/`：检查点
+- `data/screenshots/`：网页截图（可选）
+- `data/novels.db`：爬取的小说数据库
 
 **备份脚本示例：**
+
 ```bash
 #!/bin/bash
 BACKUP_DIR="/backup/novel_agent"
@@ -1545,17 +1844,21 @@ cp -r /opt/novel_agent/data/memory $BACKUP_DIR/$DATE/
 cp -r /opt/novel_agent/data/skills $BACKUP_DIR/$DATE/
 cp -r /opt/novel_agent/data/versions $BACKUP_DIR/$DATE/
 cp -r /opt/novel_agent/data/checkpoints $BACKUP_DIR/$DATE/
+cp -r /opt/novel_agent/data/screenshots $BACKUP_DIR/$DATE/ 2>/dev/null || true
+cp /opt/novel_agent/data/novels.db $BACKUP_DIR/$DATE/ 2>/dev/null || true
 
 # 保留最近30天的备份
 find $BACKUP_DIR -type d -mtime +30 -exec rm -rf {} \;
 ```
 
 **设置定时任务：**
+
 ```bash
 crontab -e
 ```
 
 添加：
+
 ```
 0 2 * * * /path/to/backup.sh
 ```
@@ -1567,11 +1870,13 @@ crontab -e
 ### 1. API连接失败
 
 **问题：**
+
 ```
 连接测试失败: Error code: 400 - Invalid API key
 ```
 
 **解决方案：**
+
 1. 检查API密钥是否正确
 2. 检查 `.env` 文件是否存在
 3. 检查 `config.py` 中的配置
@@ -1580,36 +1885,43 @@ crontab -e
 ### 2. max_tokens超限
 
 **问题：**
+
 ```
 Invalid max_tokens value, the valid range is [1, 393216]
 ```
 
 **解决方案：**
+
 1. 修改 `config.py` 中的 `LLM_MAX_TOKENS`
 2. 不同模型有不同的限制：
+
    - kimi-k2.5: 最大131077
    - deepseek-chat: 最大65536
-   - glm-4: 最大4096
 
 ### 3. 依赖安装失败
 
 **问题：**
+
 ```
 ERROR: Failed building wheel for xxx
 ```
 
 **解决方案：**
+
 1. 升级pip：
+
 ```bash
 python -m pip install --upgrade pip
 ```
 
 2. 安装编译工具（Linux）：
+
 ```bash
 sudo apt install build-essential python3-dev
 ```
 
 3. 使用预编译包：
+
 ```bash
 pip install --only-binary :all: -r requirements.txt
 ```
@@ -1617,15 +1929,18 @@ pip install --only-binary :all: -r requirements.txt
 ### 4. 测试失败
 
 **问题：**
+
 ```
 FAILED (errors=5)
 ```
 
 **解决方案：**
+
 1. 检查Python版本（需要3.8+）
 2. 检查依赖是否完整安装
 3. 检查API密钥是否配置
 4. 查看详细错误信息：
+
 ```bash
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
@@ -1633,23 +1948,28 @@ python -m unittest discover -s tests -p "test_*.py" -v
 ### 5. 内存不足
 
 **问题：**
+
 ```
 MemoryError
 ```
 
 **解决方案：**
+
 1. 减少批量生成章数：
+
 ```python
 BATCH_MAX_CHAPTERS = 5  # 从10改为5
 ```
 
 2. 减少缓存大小：
+
 ```python
 # 在 utils/llm_cache.py 中
 self.max_size = 500  # 从1000改为500
 ```
 
 3. 定期清理冷记忆：
+
 ```bash
 # 删除30天前的冷记忆
 find data/memory/cold_memory -type f -mtime +30 -delete
@@ -1658,17 +1978,19 @@ find data/memory/cold_memory -type f -mtime +30 -delete
 ### 6. 文件导入失败
 
 **问题：**
+
 ```
 不支持的文件格式
 ```
 
 **解决方案：**
+
 1. 检查文件格式是否在支持列表中：
+
    - .docx
    - .pdf
    - .txt
    - .md
-
 2. 检查文件是否损坏
 3. 检查文件路径是否正确
 
@@ -1678,7 +2000,9 @@ find data/memory/cold_memory -type f -mtime +30 -delete
 生成的章节质量不理想
 
 **解决方案：**
+
 1. 调整温度参数：
+
 ```python
 LLM_TEMPERATURE = 0.7  # 降低随机性
 ```
@@ -1693,13 +2017,16 @@ LLM_TEMPERATURE = 0.7  # 降低随机性
 伏笔状态不正确
 
 **解决方案：**
+
 1. 检查真相文件是否完整
 2. 运行诊断工具：
+
 ```
 > 运行健康检查
 ```
 
 3. 手动修复伏笔状态：
+
 ```
 > 查看伏笔状态
 > 修改伏笔状态
@@ -1711,13 +2038,16 @@ LLM_TEMPERATURE = 0.7  # 降低随机性
 上传参考文本后，生成风格没有变化
 
 **解决方案：**
+
 1. 检查参考文本是否足够长（建议1000字以上）
 2. 检查风格学习报告：
+
 ```
 > 查看风格学习报告
 ```
 
 3. 调整学习比例：
+
 ```python
 STYLE_LEARN_DIVERSITY_RATIO = 0.4  # 降低多样性，增加适应性
 STYLE_LEARN_ADAPT_RATIO = 0.6
@@ -1729,10 +2059,12 @@ STYLE_LEARN_ADAPT_RATIO = 0.6
 系统响应很慢
 
 **解决方案：**
+
 1. 检查网络连接
 2. 检查LLM API响应时间
 3. 减少批量生成章数
 4. 定期清理缓存：
+
 ```python
 # 在 utils/llm_cache.py 中
 cache.clear_cache()
@@ -1747,12 +2079,14 @@ cache.clear_cache()
 ### 1. 定期备份
 
 **备份频率：**
+
 - 真相文件：每天备份
 - 记忆系统：每周备份
 - 版本快照：每月备份
 - Skill库：每次更新后备份
 
 **备份策略：**
+
 - 本地备份：保留最近7天
 - 远程备份：保留最近30天
 - 归档备份：保留最近1年
@@ -1760,6 +2094,7 @@ cache.clear_cache()
 ### 2. 性能优化
 
 **LLM缓存优化：**
+
 ```python
 # 调整缓存大小
 max_size = 1000  # 根据内存调整
@@ -1769,12 +2104,14 @@ ttl_hours = 24  # 根据使用频率调整
 ```
 
 **记忆系统优化：**
+
 ```python
 # 定期清理冷记忆
 # 保留最近30天的冷记忆
 ```
 
 **批量生成优化：**
+
 ```python
 # 根据硬件配置调整
 BATCH_MAX_CHAPTERS = 10  # 内存充足时可增加
@@ -1783,22 +2120,27 @@ BATCH_MAX_CHAPTERS = 10  # 内存充足时可增加
 ### 3. 质量监控
 
 **定期检查：**
+
 1. 运行健康检查：
+
 ```
 > 运行健康检查
 ```
 
 2. 查看诊断报告：
+
 ```
 > 生成诊断报告
 ```
 
 3. 检查伏笔状态：
+
 ```
 > 查看伏笔健康度
 ```
 
 4. 检查角色一致性：
+
 ```
 > 检查角色状态
 ```
@@ -1806,6 +2148,7 @@ BATCH_MAX_CHAPTERS = 10  # 内存充足时可增加
 ### 4. 更新维护
 
 **依赖更新：**
+
 ```bash
 # 检查过期依赖
 pip list --outdated
@@ -1815,6 +2158,7 @@ pip install --upgrade -r requirements.txt
 ```
 
 **系统更新：**
+
 ```bash
 # 拉取最新代码
 git pull origin main
@@ -1829,12 +2173,14 @@ python -m unittest discover -s tests -p "test_*.py"
 ### 5. 日志管理
 
 **日志级别：**
+
 - DEBUG：详细调试信息
 - INFO：一般信息
 - WARNING：警告信息
 - ERROR：错误信息
 
 **日志清理：**
+
 ```bash
 # 删除7天前的日志
 find logs -type f -mtime +7 -delete
@@ -1843,11 +2189,13 @@ find logs -type f -mtime +7 -delete
 ### 6. 安全管理
 
 **API密钥安全：**
+
 - 不要将API密钥提交到Git
 - 使用环境变量管理API密钥
 - 定期轮换API密钥
 
 **数据安全：**
+
 - 定期备份重要数据
 - 限制文件访问权限
 - 使用加密存储敏感数据
@@ -1855,6 +2203,7 @@ find logs -type f -mtime +7 -delete
 ### 7. 扩展开发
 
 **添加新的SubAgent：**
+
 1. 在 `agents/` 目录创建新文件
 2. 实现SubAgent类
 3. 在 `templates/` 创建Prompt模板
@@ -1862,11 +2211,13 @@ find logs -type f -mtime +7 -delete
 5. 在 `core/main_agent.py` 注册新Agent
 
 **添加新的题材：**
+
 1. 在 `data/genres/` 创建新的JSON文件
 2. 定义题材的核心元素、常见套路、读者期待等
 3. 在 `core/genre_knowledge.py` 注册新题材
 
 **添加新的Skill：**
+
 1. 在 `data/skills/` 创建新的JSON文件
 2. 定义Skill的触发条件、执行步骤等
 3. 系统会自动学习和使用
@@ -1874,6 +2225,7 @@ find logs -type f -mtime +7 -delete
 ### 8. 监控告警
 
 **监控指标：**
+
 - API调用次数
 - Token使用量
 - 缓存命中率
@@ -1881,6 +2233,7 @@ find logs -type f -mtime +7 -delete
 - 修订轮数
 
 **告警阈值：**
+
 - API调用异常：立即告警
 - Token使用超过80%：警告
 - 审计通过率低于70%：警告
@@ -1889,11 +2242,13 @@ find logs -type f -mtime +7 -delete
 ### 9. 用户反馈
 
 **收集反馈：**
+
 - 用户满意度调查
 - 生成质量评分
 - 功能建议收集
 
 **改进流程：**
+
 1. 收集反馈
 2. 分析问题
 3. 制定改进方案
@@ -1903,12 +2258,14 @@ find logs -type f -mtime +7 -delete
 ### 10. 文档维护
 
 **文档更新：**
+
 - 功能更新后及时更新文档
 - 修复文档中的错误
 - 添加新的使用示例
 - 更新配置说明
 
 **文档结构：**
+
 - README.md：项目介绍和快速开始
 - docs/：详细文档
 - examples/：使用示例
@@ -1921,6 +2278,7 @@ find logs -type f -mtime +7 -delete
 ### 提交Issue
 
 遇到问题或有建议时，请提交Issue：
+
 1. 描述问题或建议
 2. 提供复现步骤（如果是bug）
 3. 提供环境信息（Python版本、操作系统等）
@@ -1928,6 +2286,7 @@ find logs -type f -mtime +7 -delete
 ### 提交Pull Request
 
 欢迎提交Pull Request：
+
 1. Fork项目
 2. 创建特性分支：`git checkout -b feature/your-feature`
 3. 提交更改：`git commit -m 'Add some feature'`
@@ -1952,14 +2311,16 @@ find logs -type f -mtime +7 -delete
 ## 联系方式
 
 如有问题或建议，请通过以下方式联系：
+
 - 提交Issue
-- 发送邮件至：[your-email@example.com]
+- 发送邮件至：[littleiwnter320@gmail.com]
 
 ---
 
 ## 致谢
 
 感谢以下项目和库的支持：
+
 - [OpenAI](https://openai.com/)：LLM API
 - [Anthropic](https://www.anthropic.com/)：Claude API
 - [python-docx](https://python-docx.readthedocs.io/)：Word文档处理

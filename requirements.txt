@@ -1,0 +1,10 @@
+# 核心依赖
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+openai>=1.0.0
+
+# 可选依赖（截图功能）
+# playwright>=1.40.0  # 需要手动安装: pip install playwright && playwright install chromium
+
+# 开发依赖
+# pytest>=7.4.0  # 用于运行测试

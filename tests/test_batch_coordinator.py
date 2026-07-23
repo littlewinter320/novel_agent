@@ -38,10 +38,18 @@ class TestBatchCoordinator(unittest.TestCase):
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)
     
+    @patch('agents.revisor.get_llm_client')
+    @patch('agents.auditor.get_llm_client')
+    @patch('agents.writer.get_llm_client')
     @patch('core.batch_coordinator.get_llm_client')
-    def test_initialization(self, mock_get_client):
+    def test_initialization(self, mock_bc_client, mock_writer_client, mock_auditor_client, mock_revisor_client):
         """测试初始化"""
-        mock_get_client.return_value = MockLLMClient()
+        mock_client = MockLLMClient()
+        mock_bc_client.return_value = mock_client
+        mock_writer_client.return_value = mock_client
+        mock_auditor_client.return_value = mock_client
+        mock_revisor_client.return_value = mock_client
+        
         coordinator = BatchCoordinator()
         self.assertIsNotNone(coordinator)
         self.assertIsNotNone(coordinator.llm_client)
@@ -50,24 +58,40 @@ class TestBatchCoordinator(unittest.TestCase):
         self.assertIsNotNone(coordinator.revisor)
         self.assertIsNotNone(coordinator.truth_files)
     
+    @patch('agents.revisor.get_llm_client')
+    @patch('agents.auditor.get_llm_client')
+    @patch('agents.writer.get_llm_client')
     @patch('core.batch_coordinator.get_llm_client')
-    def test_get_batch_coordinator_singleton(self, mock_get_client):
+    def test_get_batch_coordinator_singleton(self, mock_bc_client, mock_writer_client, mock_auditor_client, mock_revisor_client):
         """测试单例模式"""
         import core.batch_coordinator as bc_module
         bc_module._batch_coordinator = None
-        
-        mock_get_client.return_value = MockLLMClient()
+
+        mock_client = MockLLMClient()
+        mock_bc_client.return_value = mock_client
+        mock_writer_client.return_value = mock_client
+        mock_auditor_client.return_value = mock_client
+        mock_revisor_client.return_value = mock_client
+
         coord1 = get_batch_coordinator()
         coord2 = get_batch_coordinator()
         self.assertIs(coord1, coord2)
-        
+
         # 清理
         bc_module._batch_coordinator = None
     
+    @patch('agents.revisor.get_llm_client')
+    @patch('agents.auditor.get_llm_client')
+    @patch('agents.writer.get_llm_client')
     @patch('core.batch_coordinator.get_llm_client')
-    def test_check_cross_chapter_consistency_single_chapter(self, mock_get_client):
+    def test_check_cross_chapter_consistency_single_chapter(self, mock_bc_client, mock_writer_client, mock_auditor_client, mock_revisor_client):
         """测试跨章一致性检查-单章"""
-        mock_get_client.return_value = MockLLMClient()
+        mock_client = MockLLMClient()
+        mock_bc_client.return_value = mock_client
+        mock_writer_client.return_value = mock_client
+        mock_auditor_client.return_value = mock_client
+        mock_revisor_client.return_value = mock_client
+
         coordinator = BatchCoordinator()
         
         chapters = [
@@ -80,10 +104,18 @@ class TestBatchCoordinator(unittest.TestCase):
         self.assertTrue(result["pass"])
         self.assertIn("note", result)
     
+    @patch('agents.revisor.get_llm_client')
+    @patch('agents.auditor.get_llm_client')
+    @patch('agents.writer.get_llm_client')
     @patch('core.batch_coordinator.get_llm_client')
-    def test_check_cross_chapter_consistency_multiple_chapters(self, mock_get_client):
+    def test_check_cross_chapter_consistency_multiple_chapters(self, mock_bc_client, mock_writer_client, mock_auditor_client, mock_revisor_client):
         """测试跨章一致性检查-多章"""
-        mock_get_client.return_value = MockLLMClient()
+        mock_client = MockLLMClient()
+        mock_bc_client.return_value = mock_client
+        mock_writer_client.return_value = mock_client
+        mock_auditor_client.return_value = mock_client
+        mock_revisor_client.return_value = mock_client
+
         coordinator = BatchCoordinator()
         
         chapters = [
@@ -98,10 +130,18 @@ class TestBatchCoordinator(unittest.TestCase):
         self.assertIn("issues", result)
         self.assertIn("checked_at", result)
     
+    @patch('agents.revisor.get_llm_client')
+    @patch('agents.auditor.get_llm_client')
+    @patch('agents.writer.get_llm_client')
     @patch('core.batch_coordinator.get_llm_client')
-    def test_check_cross_chapter_consistency_discontinuous(self, mock_get_client):
+    def test_check_cross_chapter_consistency_discontinuous(self, mock_bc_client, mock_writer_client, mock_auditor_client, mock_revisor_client):
         """测试跨章一致性检查-章节号不连续"""
-        mock_get_client.return_value = MockLLMClient()
+        mock_client = MockLLMClient()
+        mock_bc_client.return_value = mock_client
+        mock_writer_client.return_value = mock_client
+        mock_auditor_client.return_value = mock_client
+        mock_revisor_client.return_value = mock_client
+
         coordinator = BatchCoordinator()
         
         chapters = [
@@ -115,10 +155,18 @@ class TestBatchCoordinator(unittest.TestCase):
         # 章节号不连续应该产生问题
         self.assertTrue(len(result["issues"]) > 0)
     
+    @patch('agents.revisor.get_llm_client')
+    @patch('agents.auditor.get_llm_client')
+    @patch('agents.writer.get_llm_client')
     @patch('core.batch_coordinator.get_llm_client')
-    def test_generate_batch_report(self, mock_get_client):
+    def test_generate_batch_report(self, mock_bc_client, mock_writer_client, mock_auditor_client, mock_revisor_client):
         """测试生成批量报告"""
-        mock_get_client.return_value = MockLLMClient()
+        mock_client = MockLLMClient()
+        mock_bc_client.return_value = mock_client
+        mock_writer_client.return_value = mock_client
+        mock_auditor_client.return_value = mock_client
+        mock_revisor_client.return_value = mock_client
+
         coordinator = BatchCoordinator()
         
         batch_result = {
