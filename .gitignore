@@ -33,6 +33,8 @@ data/truth/*.json
 data/versions/
 data/checkpoints/
 data/skills/
+data/screenshots/
+data/novels.db
 
 # 系统文件
 .DS_Store
