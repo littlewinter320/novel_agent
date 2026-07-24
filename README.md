@@ -145,7 +145,6 @@ novel_agent/
 ├── config.py                  # 配置管理
 ├── requirements.txt           # 依赖列表
 ├── README.md                  # 项目文档
-├── .env.example               # 环境变量示例
 ├── .gitignore                 # Git忽略规则
 ├── LICENSE                    # MIT许可证
 │
@@ -1538,37 +1537,15 @@ playwright install chromium
 
 #### 4. 配置API密钥
 
-**方式一：使用环境变量（推荐）**
-
-复制环境变量示例文件：
-
-```bash
-cp .env.example .env
-```
-
-编辑 `.env` 文件：
-
-```bash
-# DeepSeek配置示例
-LLM_PROVIDER=deepseek
-LLM_MODEL=deepseek-chat
-LLM_API_KEY=your-api-key-here
-LLM_BASE_URL=https://api.deepseek.com/v1
-LLM_TEMPERATURE=0.75
-LLM_MAX_TOKENS=2621440
-```
-
-**方式二：直接修改config.py**
-
-编辑 `config.py`：
+编辑 `config.py` 文件，填入你的API密钥：
 
 ```python
 LLM_PROVIDER = "deepseek"
 LLM_MODEL = "deepseek-chat"
-LLM_API_KEY = "your-api-key-here"
+LLM_API_KEY = "your-api-key-here"  # 替换为你的API密钥
 LLM_BASE_URL = "https://api.deepseek.com/v1"
 LLM_TEMPERATURE = 0.75
-LLM_MAX_TOKENS = 2621440
+LLM_MAX_TOKENS = 262144
 ```
 
 **支持的LLM提供商：**
@@ -2089,27 +2066,6 @@ jieba>=0.42.1          # 中文分词
 
 #### 5. 配置API密钥
 
-**方式一：环境变量（推荐）**
-
-创建 `.env` 文件：
-
-```bash
-cp .env.example .env
-```
-
-编辑 `.env`：
-
-```bash
-LLM_PROVIDER=deepseek
-LLM_MODEL=deepseek-chat
-LLM_API_KEY=your-api-key-here
-LLM_BASE_URL=https://api.deepseek.com/v1
-LLM_TEMPERATURE = 0.75
-LLM_MAX_TOKENS = 262144
-```
-
-**方式二：直接修改config.py**
-
 编辑 `config.py`：
 
 ```python
@@ -2199,11 +2155,10 @@ pip install -r requirements.txt
 **步骤5：配置API密钥**
 
 ```bash
-cp .env.example .env
-nano .env
+nano config.py
 ```
 
-编辑 `.env` 文件，填入API密钥。
+编辑 `config.py` 文件，填入API密钥。
 
 **步骤6：运行测试**
 
@@ -2368,9 +2323,8 @@ env:
 **解决方案：**
 
 1. 检查API密钥是否正确
-2. 检查 `.env` 文件是否存在
-3. 检查 `config.py` 中的配置
-4. 运行 `test` 命令测试连接
+2. 检查 `config.py` 中的配置
+3. 运行 `test` 命令测试连接
 
 ### 2. max_tokens超限
 
