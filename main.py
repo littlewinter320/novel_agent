@@ -227,139 +227,85 @@ class NovelAgentCLI:
     
     def _detect_crawl_intent(self, user_input: str) -> Dict[str, Any]:
         """
-        检测用户输入是否包含爬取或搜索意图
-
+        检测用户输入是否包含榜单爬取意图（只检测榜单爬取，不检测关键词搜索）
+        
         返回：
             {
-                "need_crawl": bool,           # 是否需要爬取/搜索
-                "search_type": str,           # search_type: "keyword" | "ranking" | "normal"
+                "need_crawl": bool,           # 是否需要爬取榜单
+                "search_type": str,           # search_type: "ranking" | "normal"
                 "platform": str,              # 平台（fanqie/qidian/qimao）
                 "genre": str,                 # 题材
                 "length": str,                # 篇幅（短篇/中篇/长篇）
-                "keywords": list,             # 用户输入的搜索关键词
+                "keywords": list,             # 始终为空（不使用关键词搜索）
                 "user_input": str             # 原始用户输入
             }
         """
-        # 平台关键词映射（返回爬虫模块期望的英文标识符）
         platform_keywords = {
-            "fanqie": ["番茄", "fanqie", "番茄小说", "番茄网"],
-            "qidian": ["起点", "qidian", "起点中文网", "起点网"],
-            "qimao": ["七猫", "qimao", "七猫小说", "七猫网"],
+            "fanqie": ["番茄", "fanqie", "番茄小说"],
+            "qidian": ["起点", "qidian", "起点中文网"],
+            "qimao": ["七猫", "qimao", "七猫小说"],
         }
         
-        # 题材关键词映射（扩充更多口语化表达）
         genre_keywords = {
-            "游戏": ["游戏", "网游", "系统流", "升级", "副本", "电竞", "网游之"],
-            "玄幻": ["玄幻", "修仙", "仙侠", "修真", "玄幻小说", "修仙小说"],
-            "都市": ["都市", "现代", "城市", "职场", "都市小说", "现代都市"],
-            "科幻": ["科幻", "未来", "太空", "星际", "科幻小说", "末世"],
-            "历史": ["历史", "古代", "穿越", "架空", "历史小说", "古代言情"],
-            "悬疑": ["悬疑", "推理", "侦探", "恐怖", "悬疑小说", "惊悚"],
-            "言情": ["言情", "爱情", "甜宠", "虐恋", "言情小说"],
-            "重生": ["重生", "重生之", "重生小说"],
-            "穿越": ["穿越", "穿越小说", "穿越时空"],
-            "宫斗": ["宫斗", "宫斗小说"],
-            "宅斗": ["宅斗", "宅斗小说"],
-            "古言": ["古言", "古代言情"],
+            "游戏": ["游戏", "网游", "系统流"],
+            "玄幻": ["玄幻", "修仙", "仙侠"],
+            "都市": ["都市", "现代"],
+            "科幻": ["科幻", "末世"],
+            "历史": ["历史", "古代", "穿越"],
+            "悬疑": ["悬疑", "推理"],
+            "言情": ["言情", "甜宠"],
+            "重生": ["重生"],
+            "穿越": ["穿越"],
+            "宫斗": ["宫斗"],
+            "宅斗": ["宅斗"],
+            "古言": ["古言"],
         }
-
-        # 篇幅约束映射
-        # 短篇: ≤50万字  中篇: 50~200万字  长篇: ≥200万字
+        
         length_keywords = {
-            "短篇": ["短篇", "短一点", "不要太长", "字数少", "50万以内", "50万字以内", "短篇小说"],
-            "中篇": ["中篇", "中等长度", "100万字", "100~200万", "中篇小说"],
-            "长篇": ["长篇", "长篇大论", "200万字", "200万字以上", "长篇小说"],
+            "短篇": ["短篇", "50万以内"],
+            "中篇": ["中篇", "100万字"],
+            "长篇": ["长篇", "200万字"],
         }
-
-        # 扩充触发词列表，支持更多口语化表达
-        # 意图词 + 领域词的组合方式，提高识别准确率
-        intent_triggers = [
-            # 意图词：表示用户想要做什么
-            "查看", "爬取", "最新", "热门", "爆款", "排行榜", "榜单",
-            "有什么", "推荐", "搜索", "找找", "看看", "寻找", "找",
-            "匹配", "筛选", "查询", "搜索一下", "搜搜", "搜",
-            "想看", "想读", "了解", "了解一下", "关注",
-            # 领域词：表示用户关注的领域
-            "小说", "书", "网文", "作品", "书籍",
-            # 组合表达
-            "有什么好看的", "有什么推荐", "推荐几本",
-            "什么好看", "哪本好看", "热门的", "最近火的",
-        ]
-
-        # 检测是否有爬取/搜索意图
-        has_intent = any(trigger in user_input for trigger in intent_triggers)
-
+        
+        # 榜单专用触发词
+        ranking_triggers = ["排行榜", "榜单", "排名", "排行", "top", "TOP"]
+        
         # 识别平台
         detected_platform = ""
         for platform, keywords in platform_keywords.items():
             if any(kw in user_input for kw in keywords):
                 detected_platform = platform
                 break
-
+        
         # 识别题材
         detected_genre = ""
         for genre, keywords in genre_keywords.items():
             if any(kw in user_input for kw in keywords):
                 detected_genre = genre
                 break
-
+        
         # 识别篇幅约束
         detected_length = ""
         for length, keywords in length_keywords.items():
             if any(kw in user_input for kw in keywords):
                 detected_length = length
                 break
-
-        # 提取用户输入中的搜索关键词（去除已识别的平台/题材/篇幅词）
-        # 保留用户真正想搜索的内容
-        all_known_keywords = set()
-        for keywords in platform_keywords.values():
-            all_known_keywords.update(keywords)
-        for keywords in genre_keywords.values():
-            all_known_keywords.update(keywords)
-        for keywords in length_keywords.values():
-            all_known_keywords.update(keywords)
-        all_known_keywords.update(intent_triggers)
-
-        # 从用户输入中提取真正的搜索关键词
-        import re
-        # 先去除常见标点和空格
-        clean_input = re.sub(r'[，。！？、；：\s]+', ' ', user_input).strip()
-        # 去除已识别的关键词，保留剩余部分作为搜索关键词
-        remaining = clean_input
-        for kw in sorted(all_known_keywords, key=len, reverse=True):
-            remaining = remaining.replace(kw, '')
-        # 去除多余空格
-        remaining = ' '.join(remaining.split()).strip()
-
-        # 判断搜索类型
-        # 1. 如果有剩余关键词，优先按关键词搜索
-        # 2. 如果只有题材+平台，按榜单爬取
-        # 3. 否则为普通对话
-        search_type = "normal"
-        search_keywords = []
         
-        if remaining:
-            # 用户有明确的搜索词（如"末日生存"、"无敌流"等）
-            search_type = "keyword"
-            search_keywords = [remaining]
-            # 如果剩余词太长，尝试按标点分割成多个关键词
-            if len(remaining) > 10:
-                search_keywords = re.split(r'[，。！？、；：\s]+', user_input)
-                search_keywords = [k.strip() for k in search_keywords if k.strip()]
-                # 过滤掉已知关键词
-                search_keywords = [k for k in search_keywords if k not in all_known_keywords]
-        elif has_intent and (detected_genre or detected_platform):
-            # 用户只提到了题材或平台，按榜单爬取
-            search_type = "ranking"
-
+        # 判断是否需要爬取榜单
+        # 触发条件：同时包含平台和题材，或者包含排行榜触发词
+        has_ranking_trigger = any(trigger in user_input for trigger in ranking_triggers)
+        has_platform_and_genre = bool(detected_platform) and bool(detected_genre)
+        
+        need_crawl = bool(has_ranking_trigger or has_platform_and_genre)
+        search_type = "ranking" if need_crawl else "normal"
+        
         return {
-            "need_crawl": has_intent,
+            "need_crawl": need_crawl,
             "search_type": search_type,
             "platform": detected_platform,
             "genre": detected_genre,
             "length": detected_length,
-            "keywords": search_keywords,
+            "keywords": [],
             "user_input": user_input
         }
     
@@ -368,35 +314,24 @@ class NovelAgentCLI:
         智能对话处理：自动识别意图并执行
         
         流程：
-        1. 检测用户意图（关键词搜索 / 榜单爬取 / 普通对话）
-        2. 关键词搜索：优先使用用户提供的词进行联网搜索
-        3. 榜单爬取：根据平台+题材爬取排行榜数据
-        4. 普通对话：直接使用LLM回复
+        1. 检测用户意图（榜单爬取 / 普通对话）
+        2. 榜单爬取：根据平台+题材爬取排行榜数据
+        3. 普通对话：直接使用LLM回复（LLM会检查用户写的内容是否符合要求）
         """
         if not self.llm_client:
             print("LLM未初始化")
             return True
         
         try:
-            # 1. 检测爬取/搜索意图
+            # 1. 检测爬取意图（只检测榜单爬取，不检测关键词搜索）
             intent = self._detect_crawl_intent(user_input)
             
-            # 2. 根据搜索类型执行不同策略
-            # 优先级：关键词搜索 > 榜单爬取 > 普通对话
-            if intent["search_type"] == "keyword":
-                # 用户提供了明确的搜索关键词，优先联网搜索
-                return self._handle_keyword_search(intent)
-            elif intent["search_type"] == "ranking" and (intent["platform"] or intent["genre"]):
-                # 用户只提到平台或题材，爬取排行榜
+            # 2. 只有明确的榜单爬取意图才执行爬取
+            # 触发条件：同时包含平台和题材，或者包含排行榜触发词
+            if intent["need_crawl"] and intent["search_type"] == "ranking" and (intent["platform"] or intent["genre"]):
                 return self._handle_crawl_and_analyze(intent)
-            elif intent["need_crawl"]:
-                # 有爬取意图但未明确搜索类型，尝试关键词搜索或降级到榜单
-                if intent["keywords"]:
-                    return self._handle_keyword_search(intent)
-                elif intent["platform"] or intent["genre"]:
-                    return self._handle_crawl_and_analyze(intent)
             
-            # 3. 普通对话
+            # 3. 普通对话：让LLM回复，LLM会检查用户写的内容是否符合要求
             return self._handle_normal_conversation(user_input)
             
         except Exception as e:
@@ -897,7 +832,7 @@ class NovelAgentCLI:
             self.progress.complete_task(f"截图已保存: {path}")
     
     def _handle_normal_conversation(self, user_input: str) -> bool:
-        """处理普通对话（无爬取意图）"""
+        """处理普通对话（无爬取意图），让LLM检查用户写的内容是否符合要求"""
         if not self.llm_client:
             print("LLM未初始化")
             return True
@@ -913,6 +848,18 @@ class NovelAgentCLI:
 3. 主动判断：自动识别用户需要哪个功能
 4. 迭代更新：知识库、大纲、规划等都是活的
 5. 质量保证：输出前必须经过Quality Gate检查
+
+【核心功能 - 自动检查用户写的内容】
+当用户提供了自己写的内容（如大纲、章节、设定、片段等）时，你必须：
+1. **检查内容是否完整**：查看是否有遗漏的关键元素
+2. **检查逻辑是否合理**：查看情节、设定是否自洽
+3. **检查是否符合要求**：如果用户之前提出过要求（如字数限制、篇幅要求、风格要求等），检查内容是否符合
+4. **提供改进建议**：基于检查结果给出具体的改进建议
+
+【检查标准】
+- 如果用户提到篇幅要求：短篇≤50万字，中篇50-200万字，长篇≥200万字
+- 如果用户提到题材要求：检查内容是否符合该题材的特点
+- 如果用户提到风格要求：检查内容是否符合该风格
 
 【沟通风格】
 - 专业但不生硬
