@@ -301,10 +301,10 @@ class WebScraper:
     def _parse_fanqie(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
         """解析番茄小说页面"""
         novels = []
-        
+
         # 番茄小说排行榜使用 .rank-book-item 作为小说容器
         items = soup.select(".rank-book-item")
-        
+
         for item in items:
             try:
                 # 标题
@@ -317,31 +317,35 @@ class WebScraper:
                 heat_elem = item.select_one(".book-item-count")
                 # 链接
                 link_elem = item.select_one(".title a[href]")
-                
+                # 字数（尝试多种选择器）
+                word_count_elem = item.select_one(".word-count, .book-word-count, .count-item")
+
                 title = title_elem.get_text(strip=True) if title_elem else ""
                 author = author_elem.get_text(strip=True) if author_elem else ""
                 brief = brief_elem.get_text(strip=True) if brief_elem else ""
                 heat = heat_elem.get_text(strip=True) if heat_elem else ""
-                
+                word_count = word_count_elem.get_text(strip=True) if word_count_elem else ""
+
                 # 提取标签（从简介中提取【】包裹的标签）
                 import re
                 tags = re.findall(r'【(.*?)】', brief[:200])
-                
+
                 novel = {
                     "title": title,
                     "author": author,
                     "heat": heat.replace("在读：", "").strip(),
                     "brief": brief[:300],  # 限制简介长度
                     "tags": tags[:5],
-                    "url": urljoin("https://fanqienovel.com", link_elem["href"]) if link_elem else ""
+                    "url": urljoin("https://fanqienovel.com", link_elem["href"]) if link_elem else "",
+                    "word_count": word_count  # 添加字数字段
                 }
-                
+
                 if novel["title"]:
                     novels.append(novel)
             except Exception as e:
                 print(f"解析番茄小说失败: {e}")
                 continue
-        
+
         return novels
     
     def _parse_qidian(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:

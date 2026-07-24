@@ -230,7 +230,7 @@ class NovelAgentCLI:
         检测用户输入是否包含爬取意图
 
         返回：
-            {"need_crawl": bool, "platform": str, "genre": str, "keywords": list}
+            {"need_crawl": bool, "platform": str, "genre": str, "length": str, "keywords": list}
         """
         # 平台关键词映射（返回爬虫模块期望的英文标识符）
         platform_keywords = {
@@ -248,11 +248,20 @@ class NovelAgentCLI:
             "历史": ["历史", "古代", "穿越", "架空"],
             "悬疑": ["悬疑", "推理", "侦探", "恐怖"],
         }
-        
+
+        # 篇幅约束映射
+        # 短篇: ≤50万字  中篇: 50~200万字  长篇: ≥200万字
+        length_keywords = {
+            "短篇": ["短篇", "短一点", "不要太长", "字数少", "50万以内", "50万字以内"],
+            "中篇": ["中篇", "中等长度", "100万字", "100~200万"],
+            "长篇": ["长篇", "长篇大论", "200万字", "200万字以上"],
+        }
+
         # 检测爬取意图关键词
         crawl_triggers = ["查看", "爬取", "最新", "热门", "爆款", "排行榜",
-                         "榜单", "有什么", "推荐", "搜索", "找找", "看看"]
-        
+                         "榜单", "有什么", "推荐", "搜索", "找找", "看看",
+                         "寻找", "找", "匹配", "筛选"]
+
         need_crawl = any(trigger in user_input for trigger in crawl_triggers)
         
         # 识别平台
@@ -269,10 +278,18 @@ class NovelAgentCLI:
                 detected_genre = genre
                 break
 
+        # 识别篇幅约束
+        detected_length = ""
+        for length, keywords in length_keywords.items():
+            if any(kw in user_input for kw in keywords):
+                detected_length = length
+                break
+
         return {
             "need_crawl": need_crawl,
             "platform": detected_platform,
             "genre": detected_genre,
+            "length": detected_length,
             "user_input": user_input
         }
     
@@ -308,27 +325,28 @@ class NovelAgentCLI:
         爬取数据并分析（核心流程）
 
         流程：
-        1. 显示进度 → 2. 爬取数据 → 3. 数据入库 → 4. 截图 → 5. 更新知识库 → 6. LLM分析
+        1. 显示进度 → 2. 爬取数据 → 3. 数据入库 → 4. 截图 → 5. 更新知识库 → 6. 篇幅筛选 → 7. LLM分析
         """
         platform = intent["platform"] or "fanqie"
         genre = intent["genre"] or "游戏"
         user_input = intent["user_input"]
-        
+        length = intent.get("length", "")
+
         # 步骤1：爬取数据
         self.progress.start_task(f"正在爬取{platform}的{genre}类热门小说...", total=3)
         
         self.progress.update_progress(1, f"连接{platform}...")
         crawl_result = self.scraper.crawl_platform(platform, genre, limit=10)
-        
+
         if "error" in crawl_result:
             self.progress.fail_task(f"爬取失败: {crawl_result['error']}")
             # 降级：使用LLM直接分析
             print(f"\n爬虫无法获取实时数据，使用AI分析模式...")
             return self._handle_normal_conversation(user_input)
-        
+
         novels = crawl_result.get("novels", [])
         self.progress.update_progress(2, f"获取到{len(novels)}部小说")
-        
+
         # 步骤2：数据入库
         self.progress.update_progress(3, "数据入库中...")
         saved_count = 0
@@ -338,12 +356,12 @@ class NovelAgentCLI:
             novel_id = self.novel_db.save_novel(novel)
             if novel_id > 0:
                 saved_count += 1
-        
+
         # 记录爬取日志
         crawl_url = crawl_result.get("url", "")
         self.novel_db.log_crawl(platform, genre, crawl_url, "success", f"爬取{len(novels)}部小说", len(novels))
         self.progress.complete_task(f"数据入库完成，新增/更新{saved_count}部小说")
-        
+
         # 步骤3：截图（如果浏览器可用）
         screenshot_path = None
         if crawl_result.get("url"):
@@ -357,25 +375,106 @@ class NovelAgentCLI:
                 self.progress.complete_task(f"截图已保存: {screenshot_path}")
             else:
                 self.progress.fail_task("截图失败（浏览器未安装，非关键功能）")
-        
+
         # 步骤4：更新知识库 - 提取爆火小说写法特征
         self.progress.start_task("正在分析爆火特征并更新知识库...", total=1)
         self._update_genre_knowledge(novels, genre)
         self.progress.complete_task("知识库已更新")
-        
-        # 步骤5：LLM综合分析
+
+        # 步骤5：根据篇幅要求筛选小说
+        if length:
+            self.progress.start_task(f"正在筛选{length}小说...", total=1)
+            filtered_novels = self._filter_novels_by_length(novels, length)
+            if filtered_novels:
+                self.progress.complete_task(f"筛选完成，找到{len(filtered_novels)}部符合条件的小说")
+                novels = filtered_novels
+            else:
+                self.progress.fail_task(f"未找到符合{length}要求的小说")
+                # 即使筛选失败，也继续分析，让LLM说明情况
+
+        # 步骤6：LLM综合分析
         self.progress.start_task("正在生成分析报告...", total=1)
-        analysis = self._generate_analysis(novels, genre, platform, user_input)
+        analysis = self._generate_analysis(novels, genre, platform, user_input, length)
         self.progress.complete_task("分析完成")
-        
+
         # 输出结果
         print(f"\n{analysis}")
-        
+
         # 保存对话历史
         self.conversation_history.append({"role": "user", "content": user_input})
         self.conversation_history.append({"role": "assistant", "content": analysis})
-        
+
         return True
+
+    def _parse_word_count(self, word_count_str: str) -> int:
+        """
+        解析字数字符串为数字（单位：万字）
+
+        Args:
+            word_count_str: 字数字符串，如"50万字"、"100万"、"2000000字"
+
+        Returns:
+            字数（万字），解析失败返回0
+        """
+        if not word_count_str:
+            return 0
+
+        import re
+
+        # 匹配"X万字"或"X万"
+        match = re.search(r'(\d+(?:\.\d+)?)\s*万', word_count_str)
+        if match:
+            return float(match.group(1))
+
+        # 匹配"X字"（转换为万字）
+        match = re.search(r'(\d+)\s*字', word_count_str)
+        if match:
+            return int(match.group(1)) / 10000
+
+        return 0
+
+    def _filter_novels_by_length(self, novels: list, length: str) -> list:
+        """
+        根据篇幅要求筛选小说
+
+        Args:
+            novels: 小说列表
+            length: 篇幅要求（短篇/中篇/长篇）
+
+        Returns:
+            筛选后的小说列表
+        """
+        if not length:
+            return novels
+
+        # 篇幅范围定义（单位：万字）
+        length_ranges = {
+            "短篇": (0, 50),      # ≤50万字
+            "中篇": (50, 200),    # 50-200万字
+            "长篇": (200, float('inf'))  # ≥200万字
+        }
+
+        if length not in length_ranges:
+            return novels
+
+        min_words, max_words = length_ranges[length]
+        filtered = []
+
+        for novel in novels:
+            word_count_str = novel.get("word_count", "")
+            word_count = self._parse_word_count(word_count_str)
+
+            # 如果有字数信息，进行筛选
+            if word_count > 0:
+                if min_words <= word_count <= max_words:
+                    filtered.append(novel)
+            # 如果没有字数信息，暂时保留，让LLM判断
+            # 但标记为"字数未知"
+            else:
+                novel["word_count_note"] = "字数未知"
+                filtered.append(novel)
+
+        return filtered
     
     def _update_genre_knowledge(self, novels: list, genre: str):
         """
@@ -444,23 +543,57 @@ class NovelAgentCLI:
         except Exception as e:
             print(f"更新知识库失败: {e}")
     
-    def _generate_analysis(self, novels: list, genre: str, platform: str, 
-                          user_input: str) -> str:
+    def _generate_analysis(self, novels: list, genre: str, platform: str,
+                          user_input: str, length: str = "") -> str:
         """让LLM基于真实爬取数据生成分析报告"""
         novel_data = json.dumps(novels[:10], ensure_ascii=False, indent=2)
-        
+
+        # 构建篇幅约束说明
+        length_constraint = ""
+        if length == "短篇":
+            length_constraint = """
+【重要约束】用户要求短篇作品（≤50万字）。
+**关键要求**：
+- 如果小说数据中有 `word_count` 字段，必须严格筛选字数≤50万字的作品
+- 如果数据中**没有字数信息**，你必须在回答开头明确声明："**注意：爬取的数据中未提供字数信息，无法确定篇幅是否符合要求。以下推荐未经验证篇幅。**"
+- 绝对不要假装知道字数，不要编造字数信息
+"""
+        elif length == "中篇":
+            length_constraint = """
+【重要约束】用户要求中篇作品（50-200万字）。
+**关键要求**：
+- 如果小说数据中有 `word_count` 字段，必须严格筛选字数在50-200万字之间的作品
+- 如果数据中**没有字数信息**，你必须在回答开头明确声明："**注意：爬取的数据中未提供字数信息，无法确定篇幅是否符合要求。以下推荐未经验证篇幅。**"
+- 绝对不要假装知道字数，不要编造字数信息
+"""
+        elif length == "长篇":
+            length_constraint = """
+【重要约束】用户要求长篇作品（≥200万字）。
+**关键要求**：
+- 如果小说数据中有 `word_count` 字段，必须严格筛选字数≥200万字的作品
+- 如果数据中**没有字数信息**，你必须在回答开头明确声明："**注意：爬取的数据中未提供字数信息，无法确定篇幅是否符合要求。以下推荐未经验证篇幅。**"
+- 绝对不要假装知道字数，不要编造字数信息
+"""
+
         prompt = f"""你是一个专业的网络小说市场分析师。基于以下从{platform}实时爬取的{genre}类热门小说数据，为用户提供分析。
 
 用户问题：{user_input}
-
+{length_constraint}
 实时爬取的热门小说数据：
 {novel_data}
+
+**重要检查**：
+请先检查上述数据中每部小说是否包含 `word_count` 字段。
+- 如果所有小说都**没有** `word_count` 字段，你必须在回答的**第一行**用粗体声明："**注意：爬取的数据中未提供字数信息，无法按篇幅筛选。以下推荐未经验证篇幅。**"
+- 如果部分小说有 `word_count`，只推荐符合篇幅要求的作品
+- 绝对不要编造或猜测字数
 
 请基于以上真实数据回答用户问题，要求：
 1. 引用具体的小说名称和数据
 2. 分析这些作品的共同爆火特征
 3. 给出创作建议
 4. 如果不是爽文方向，特别说明如何在保持吸引力的同时避免纯爽文套路
+5. 如果有篇幅约束且有字数数据，必须严格遵守并筛选符合要求的作品
 
 注意：以上数据是从{platform}实时爬取的真实数据，请基于此分析。"""
         
