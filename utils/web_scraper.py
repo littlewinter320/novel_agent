@@ -103,20 +103,22 @@ class WebScraper:
         "fanqie": {
             "name": "番茄小说",
             "base_url": "https://fanqienovel.com",
-            "ranking_url": "https://fanqienovel.com/ranking/hot_male_{genre_id}",
+            "home_url": "https://fanqienovel.com",
+            "ranking_url": "https://fanqienovel.com/rank",
             "genre_map": {
-                "都市": "10001",
-                "玄幻": "10002",
-                "仙侠": "10003",
-                "科幻": "10004",
-                "游戏": "10005",
-                "悬疑": "10006",
+                "都市": "/rank/1_2_261",  # 都市日常
+                "玄幻": "/rank/1_2_257",  # 玄幻脑洞
+                "仙侠": "/rank/1_2_1140",  # 东方仙侠
+                "科幻": "/rank/1_2_8",     # 科幻末世
+                "游戏": "/rank/1_2_746",   # 游戏体育
+                "悬疑": "/rank/1_2_539",   # 悬疑脑洞
             }
         },
         "qidian": {
             "name": "起点中文网",
             "base_url": "https://www.qidian.com",
-            "ranking_url": "https://www.qidian.com/rank/hotsales/{genre_id}/",
+            "home_url": "https://www.qidian.com",
+            "ranking_url": "https://www.qidian.com/rank",
             "genre_map": {
                 "都市": "都市",
                 "玄幻": "玄幻",
@@ -129,7 +131,8 @@ class WebScraper:
         "qimao": {
             "name": "七猫小说",
             "base_url": "https://www.qimao.com",
-            "ranking_url": "https://www.qimao.com/rank/hot_{genre_id}",
+            "home_url": "https://www.qimao.com",
+            "ranking_url": "https://www.qimao.com/rank",
             "genre_map": {
                 "都市": "dushi",
                 "玄幻": "xuanhuan",
@@ -175,16 +178,17 @@ class WebScraper:
             "User-Agent": random.choice(self.USER_AGENTS),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip, deflate",  # 移除br，requests默认不支持Brotli
             "Connection": "keep-alive",
         }
     
-    def _fetch_page(self, url: str) -> str:
+    def _fetch_page(self, url: str, max_retries: int = 3) -> str:
         """
-        获取页面内容
+        获取页面内容（带重试机制）
         
         Args:
             url: 页面URL
+            max_retries: 最大重试次数
         
         Returns:
             页面HTML内容
@@ -199,15 +203,30 @@ class WebScraper:
                 print(f"Playwright爬取失败: {e}")
                 return ""
         else:
-            # 使用requests静态爬取
-            try:
-                headers = self._get_random_headers()
-                response = self.session.get(url, headers=headers, timeout=10)
-                response.raise_for_status()
-                return response.text
-            except Exception as e:
-                print(f"请求失败: {e}")
-                return ""
+            # 使用requests静态爬取（带重试）
+            for attempt in range(max_retries):
+                try:
+                    headers = self._get_random_headers()
+                    # 禁用SSL验证以解决证书问题
+                    response = self.session.get(
+                        url, 
+                        headers=headers, 
+                        timeout=15,
+                        verify=False
+                    )
+                    response.raise_for_status()
+                    # 设置正确的编码
+                    response.encoding = response.apparent_encoding
+                    return response.text
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        wait_time = 2 ** attempt  # 指数退避
+                        print(f"请求失败(尝试{attempt+1}/{max_retries}): {e}，{wait_time}秒后重试...")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"请求失败(已重试{max_retries}次): {e}")
+                        return ""
+            return ""
     
     def crawl_platform(self, platform: str, genre: str, limit: int = 10) -> Dict[str, Any]:
         """
@@ -225,17 +244,24 @@ class WebScraper:
         if not platform_config:
             return {"error": f"不支持的平台: {platform}"}
         
-        genre_id = platform_config["genre_map"].get(genre)
-        if not genre_id:
+        # 获取题材对应的URL路径
+        genre_path = platform_config["genre_map"].get(genre)
+        if not genre_path:
             return {"error": f"不支持的题材: {genre}"}
         
-        # 构造URL
-        url = platform_config["ranking_url"].format(genre_id=genre_id)
+        # 构造完整URL（如果是相对路径，拼接base_url）
+        if genre_path.startswith("http"):
+            target_url = genre_path
+        elif genre_path.startswith("/"):
+            target_url = platform_config["base_url"] + genre_path
+        else:
+            # 对于起点等使用中文题材名的情况
+            target_url = platform_config["ranking_url"] + "/" + genre_path
         
-        # 爬取页面
-        html = self._fetch_page(url)
+        # 爬取目标页面
+        html = self._fetch_page(target_url)
         if not html:
-            return {"error": "爬取失败"}
+            return {"error": "页面爬取失败"}
         
         # 解析数据
         novels = self._parse_novels(html, platform)
@@ -245,7 +271,7 @@ class WebScraper:
             "genre": genre,
             "novels": novels[:limit],
             "crawled_at": datetime.now().isoformat(),
-            "url": url
+            "url": target_url
         }
     
     def _parse_novels(self, html: str, platform: str) -> List[Dict[str, Any]]:
@@ -276,23 +302,37 @@ class WebScraper:
         """解析番茄小说页面"""
         novels = []
         
-        # 番茄小说的榜单结构（需要根据实际页面调整）
-        items = soup.select(".rank-item, .book-item, .novel-item")
+        # 番茄小说排行榜使用 .rank-book-item 作为小说容器
+        items = soup.select(".rank-book-item")
         
         for item in items:
             try:
-                title_elem = item.select_one(".title, .book-title, h3")
-                author_elem = item.select_one(".author, .book-author")
-                heat_elem = item.select_one(".heat, .popularity, .rank-value")
-                brief_elem = item.select_one(".brief, .intro, .description")
-                link_elem = item.select_one("a[href]")
+                # 标题
+                title_elem = item.select_one(".title a")
+                # 作者
+                author_elem = item.select_one(".author a span, .author a")
+                # 简介
+                brief_elem = item.select_one(".desc, .abstract")
+                # 热度/在读人数
+                heat_elem = item.select_one(".book-item-count")
+                # 链接
+                link_elem = item.select_one(".title a[href]")
+                
+                title = title_elem.get_text(strip=True) if title_elem else ""
+                author = author_elem.get_text(strip=True) if author_elem else ""
+                brief = brief_elem.get_text(strip=True) if brief_elem else ""
+                heat = heat_elem.get_text(strip=True) if heat_elem else ""
+                
+                # 提取标签（从简介中提取【】包裹的标签）
+                import re
+                tags = re.findall(r'【(.*?)】', brief[:200])
                 
                 novel = {
-                    "title": title_elem.get_text(strip=True) if title_elem else "",
-                    "author": author_elem.get_text(strip=True) if author_elem else "",
-                    "heat": heat_elem.get_text(strip=True) if heat_elem else "",
-                    "brief": brief_elem.get_text(strip=True) if brief_elem else "",
-                    "tags": [],
+                    "title": title,
+                    "author": author,
+                    "heat": heat.replace("在读：", "").strip(),
+                    "brief": brief[:300],  # 限制简介长度
+                    "tags": tags[:5],
                     "url": urljoin("https://fanqienovel.com", link_elem["href"]) if link_elem else ""
                 }
                 

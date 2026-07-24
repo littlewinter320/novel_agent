@@ -337,30 +337,119 @@ def get_llm_client(**kwargs) -> LLMClient:
     return _client
 
 
-def test_connection() -> bool:
+def test_connection(max_retries: int = 3, retry_delay: float = 2.0) -> bool:
     """
-    测试API连接
+    测试API连接（带自动重试）
     
     用于验证API配置是否正确，网络是否通畅。
     发送一个简单的测试消息，检查是否能收到有效回复。
+    失败时会自动重试，支持配置重试次数和延迟。
+    
+    Args:
+        max_retries: 最大重试次数（默认3次）
+        retry_delay: 重试间隔秒数（默认2秒）
     
     Returns:
-        bool: 连接成功返回True，失败返回False
+        bool: 连接成功返回True，所有重试失败返回False
     
     示例：
-        if test_connection():
+        if test_connection(max_retries=5, retry_delay=3):
             print("API连接正常")
         else:
             print("API连接失败，请检查配置")
     """
-    try:
-        client = get_llm_client()
-        response = client.generate("你好，请回复'连接成功'")
-        # 检查回复中是否包含关键词
-        return "成功" in response or "连接" in response
-    except Exception as e:
-        print(f"连接测试失败: {e}")
-        return False
+    import time
+    
+    for attempt in range(max_retries):
+        try:
+            client = get_llm_client()
+            response = client.generate("你好，请回复'连接成功'")
+            # 检查回复中是否包含关键词
+            if "成功" in response or "连接" in response:
+                return True
+            else:
+                print(f"第{attempt + 1}次尝试：回复内容不符合预期")
+        except Exception as e:
+            print(f"第{attempt + 1}次尝试失败: {e}")
+        
+        # 如果不是最后一次尝试，等待后重试
+        if attempt < max_retries - 1:
+            print(f"等待 {retry_delay} 秒后重试...")
+            time.sleep(retry_delay)
+    
+    print(f"所有 {max_retries} 次尝试均失败")
+    return False
+
+
+def test_with_fallback(fallback_providers: list = None, max_retries_per_provider: int = 2) -> Optional[LLMClient]:
+    """
+    测试连接并支持提供商切换
+    
+    当当前提供商连接失败时，自动尝试其他提供商。
+    
+    Args:
+        fallback_providers: 备用提供商列表，例如：
+            [
+                {"provider": "deepseek", "api_key": "xxx", "base_url": "https://api.deepseek.com/v1"},
+                {"provider": "openai", "api_key": "yyy", "base_url": "https://api.openai.com/v1"}
+            ]
+        max_retries_per_provider: 每个提供商的最大重试次数（默认2次）
+    
+    Returns:
+        LLMClient: 连接成功的客户端，所有提供商都失败返回None
+    
+    示例：
+        client = test_with_fallback(
+            fallback_providers=[
+                {"provider": "deepseek", "api_key": "key1"},
+                {"provider": "openai", "api_key": "key2"}
+            ]
+        )
+        if client:
+            response = client.generate("你好")
+    """
+    import time
+    
+    # 首先尝试当前配置的提供商
+    print("尝试当前配置的提供商...")
+    if test_connection(max_retries=max_retries_per_provider):
+        print("✓ 当前提供商连接成功")
+        return get_llm_client()
+    
+    # 如果没有备用提供商，直接返回None
+    if not fallback_providers:
+        print("✗ 当前提供商失败，且未配置备用提供商")
+        return None
+    
+    # 尝试备用提供商
+    for idx, provider_config in enumerate(fallback_providers, 1):
+        provider_name = provider_config.get("provider", "unknown")
+        print(f"\n尝试备用提供商 {idx}/{len(fallback_providers)}: {provider_name}")
+        
+        try:
+            # 创建新的客户端实例
+            client = LLMClient(**provider_config)
+            
+            # 测试连接
+            response = client.generate("你好，请回复'连接成功'")
+            if "成功" in response or "连接" in response:
+                print(f"✓ 备用提供商 {provider_name} 连接成功")
+                # 更新全局客户端
+                global _client
+                _client = client
+                return client
+            else:
+                print(f"✗ 备用提供商 {provider_name} 回复不符合预期")
+        except Exception as e:
+            print(f"✗ 备用提供商 {provider_name} 连接失败: {e}")
+        
+        # 等待后尝试下一个
+        if idx < len(fallback_providers):
+            print("等待2秒后尝试下一个提供商...")
+            time.sleep(2)
+    
+    print("\n✗ 所有提供商均连接失败")
+    return None
 
 
 if __name__ == "__main__":
