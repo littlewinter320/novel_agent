@@ -16,7 +16,7 @@
 关键参数说明：
 - MAX_AUDIT_ROUNDS: 审计-修订循环次数，平衡质量与效率
 - VARIETY_WINDOW_SIZE: 统计最近N章的词汇使用，控制重复度
-- STYLE_LEARN_DIVERSITY_RATIO: 保持75%多样性，25%适应用户偏好
+- STYLE_LEARN_DIVERSITY_RATIO: 保持40%多样性，60%适应用户偏好
 """
 import os
 
@@ -54,10 +54,10 @@ WARM_MEMORY_FILE = os.path.join(MEMORY_DIR, "warm_memory.json")
 # ========== LLM配置 ==========
 # 支持的提供商: kimi, deepseek, glm, openai, claude, custom
 # 修改以下配置以使用不同的LLM提供商
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "")
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "deepseek")
+LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-pro")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "sk-12a26cdb975e44ae80afbf602f2f76af")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1")
 # 温度参数: 0.0-2.0, 值越高输出越随机, 值越低输出越确定
 # 注意: 某些模型可能有特定的温度限制（如kimi-k2.5只支持1.0）
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.75"))
@@ -90,10 +90,10 @@ TREND_REFRESH_MIN_INTERVAL = 5
 TREND_REFRESH_MAX_INTERVAL = 25
 
 # ========== 风格学习 ==========
-# 多样性保持比例：60%保持原有风格多样性，避免过度拟合用户偏好
-STYLE_LEARN_DIVERSITY_RATIO = 0.6
-# 用户适应比例：40%适应用户的写作偏好和习惯
-STYLE_LEARN_ADAPT_RATIO = 0.4
+# 多样性保持比例：40%保持原有风格多样性，避免过度拟合用户偏好
+STYLE_LEARN_DIVERSITY_RATIO = 0.4
+# 用户适应比例：60%适应用户的写作偏好和习惯
+STYLE_LEARN_ADAPT_RATIO = 0.6
 # 学习报告间隔：每10章输出一次风格学习报告，让用户了解学习进度
 STYLE_LEARN_REPORT_INTERVAL = 10
 

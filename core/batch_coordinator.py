@@ -47,6 +47,7 @@ from agents.writer import get_writer_agent
 from agents.auditor import get_auditor_agent
 from agents.revisor import get_revisor_agent
 from core.truth_files import TruthFiles
+from core.exporter import get_exporter
 
 # 单章生成失败后的最大重试次数（从生成阶段重新开始）
 MAX_GENERATE_RETRY = 2
@@ -256,6 +257,9 @@ class BatchCoordinator:
         # 5. 跨章一致性检查
         cross_chapter_check = self.check_cross_chapter_consistency(chapters, genre)
 
+        # 6. 自动导出为 Markdown 文件
+        export_result = self._auto_export(chapters)
+
         return {
             "chapters": chapters,
             "audit_results": audit_results,
@@ -263,8 +267,49 @@ class BatchCoordinator:
             "success_count": success_count,
             "failed_chapters": failed_chapters,
             "total_count": len(chapter_plans),
-            "generated_at": datetime.now().isoformat()
+            "generated_at": datetime.now().isoformat(),
+            "export_result": export_result
         }
+
+    def _auto_export(self, chapters: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        自动生成 Markdown 文件
+
+        实现逻辑:
+        1. 获取导出器实例
+        2. 生成输出文件名（包含时间戳）
+        3. 导出所有章节为单个 Markdown 文件
+        4. 返回导出结果
+
+        Args:
+            chapters: 生成的章节列表
+
+        Returns:
+            导出结果字典
+        """
+        if not chapters:
+            return {"exported": False, "error": "无章节可导出"}
+
+        try:
+            exporter = get_exporter()
+
+            # 生成输出文件名（带时间戳）
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = os.path.join(config.DATA_DIR, f"novel_{timestamp}.md")
+
+            # 导出为 Markdown
+            result = exporter.export_markdown(chapters, output_file)
+
+            if result.get("exported"):
+                print(f"[BatchCoordinator] 章节已导出到: {output_file}")
+            else:
+                print(f"[BatchCoordinator] 导出失败: {result.get('error')}")
+
+            return result
+
+        except Exception as e:
+            print(f"[BatchCoordinator] 自动导出异常: {e}")
+            return {"exported": False, "error": str(e)}
 
     def _collect_previous_summaries(self, chapters: List[Dict[str, Any]]) -> List[str]:
         """

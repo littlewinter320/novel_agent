@@ -28,6 +28,10 @@ from typing import Optional, Dict, Any
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# 在所有模块导入之前，先检测并安装依赖
+from utils.dependency_installer import ensure_dependencies
+ensure_dependencies()
+
 import config
 from utils.llm_client import get_llm_client, test_connection
 from utils.progress_display import get_progress_display
@@ -64,6 +68,9 @@ class NovelAgentCLI:
     def initialize(self):
         """初始化系统，包含所有子模块"""
         print("\n小说创作Agent系统")
+        
+        # 自动检测并安装缺失依赖
+        ensure_dependencies()
         
         # 检查LLM提供商
         if config.LLM_PROVIDER not in ['deepseek', 'kimi', 'glm', 'openai', 'claude', 'custom']:
