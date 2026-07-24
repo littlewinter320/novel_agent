@@ -40,8 +40,9 @@ data/novels.db
 .DS_Store
 Thumbs.db
 
-# 测试产物
-tests/mock_cert.pem
+# 测试和CI工作流（仅本地开发使用，不对外发布）
+tests/
+.github/workflows/
 htmlcov/
 .coverage
 .pytest_cache/

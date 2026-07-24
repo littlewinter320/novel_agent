@@ -150,13 +150,6 @@ novel_agent/
 ├── .gitignore                 # Git忽略规则
 ├── LICENSE                    # MIT许可证
 │
-├── .github/                   # GitHub Actions工作流
-│   └── workflows/
-│       ├── ci.yml             # 持续集成（多版本多平台测试）
-│       ├── code-quality.yml   # 代码质量检查 + 安全扫描
-│       ├── deploy.yml         # 自动构建 + GitHub Release
-│       └── docs.yml           # 文档一致性检查
-│
 ├── agents/                    # 6个专业化子Agent
 │   ├── scout.py              # 扫榜分析师
 │   ├── architect.py          # 架构师
@@ -236,16 +229,6 @@ novel_agent/
 │   ├── checkpoints/          # 检查点
 │   ├── screenshots/          # 网页截图（Playwright生成）
 │   └── novels.db             # SQLite数据库（爬取的小说数据）
-│
-└── tests/                     # 单元测试（348个测试）
-    ├── test_main_agent.py
-    ├── test_scout.py
-    ├── test_architect.py
-    ├── test_writer.py
-    ├── test_auditor.py
-    ├── test_revisor.py
-    ├── test_style_engineer.py
-    └── ... (其他测试文件)
 ```
 
 ### 组件交互流程
@@ -1285,8 +1268,8 @@ kb.reload()
 
 **"轻微改动"原则：**
 
-- 70%保持原有风格多样性
-- 30%适应用户偏好
+- 40%保持原有风格多样性
+- 60%适应用户偏好
 
 **学习报告：**
 
@@ -1572,8 +1555,8 @@ LLM_PROVIDER=deepseek
 LLM_MODEL=deepseek-chat
 LLM_API_KEY=your-api-key-here
 LLM_BASE_URL=https://api.deepseek.com/v1
-LLM_TEMPERATURE=0.7
-LLM_MAX_TOKENS=8192
+LLM_TEMPERATURE=0.75
+LLM_MAX_TOKENS=2621440
 ```
 
 **方式二：直接修改config.py**
@@ -1585,8 +1568,8 @@ LLM_PROVIDER = "deepseek"
 LLM_MODEL = "deepseek-chat"
 LLM_API_KEY = "your-api-key-here"
 LLM_BASE_URL = "https://api.deepseek.com/v1"
-LLM_TEMPERATURE = 0.7
-LLM_MAX_TOKENS = 8192
+LLM_TEMPERATURE = 0.75
+LLM_MAX_TOKENS = 2621440
 ```
 
 **支持的LLM提供商：**
@@ -2122,8 +2105,8 @@ LLM_PROVIDER=deepseek
 LLM_MODEL=deepseek-chat
 LLM_API_KEY=your-api-key-here
 LLM_BASE_URL=https://api.deepseek.com/v1
-LLM_TEMPERATURE=0.7
-LLM_MAX_TOKENS=8192
+LLM_TEMPERATURE = 0.75
+LLM_MAX_TOKENS = 262144
 ```
 
 **方式二：直接修改config.py**
