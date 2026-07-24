@@ -54,7 +54,7 @@ try:
         browser = pw.chromium.launch(headless=True)
         browser.close()
         pw.stop()
-        PLAYWRIGHT_AVAILABLE = True
+        PLAYWRIGHT_PKG_AVAILABLE = True
     except Exception as e:
         # 浏览器未安装，尝试自动安装
         print("检测到Playwright已安装，但浏览器未安装，正在自动安装...")
@@ -66,13 +66,13 @@ try:
                 timeout=300  # 5分钟超时
             )
             if result.returncode == 0:
-                PLAYWRIGHT_AVAILABLE = True
+                PLAYWRIGHT_PKG_AVAILABLE = True
                 print("浏览器安装完成")
             else:
-                PLAYWRIGHT_AVAILABLE = False
+                PLAYWRIGHT_PKG_AVAILABLE = False
                 print(f"浏览器安装失败: {result.stderr[:100]}")
         except Exception as install_error:
-            PLAYWRIGHT_AVAILABLE = False
+            PLAYWRIGHT_PKG_AVAILABLE = False
             print(f"浏览器安装失败: {str(install_error)[:100]}")
 except ImportError:
     PLAYWRIGHT_PKG_AVAILABLE = False

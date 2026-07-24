@@ -320,20 +320,9 @@ class LLMCache:
     4. 调用get_stats()获取统计信息
     """
     
-    def __init__(self, max_size: int = 1000, ttl_hours: int = 24,
+    def __init__(self, max_size: int = 2000, ttl_hours: int = 168,
                  enable_semantic: bool = True, enable_keyword: bool = True,
-                 semantic_threshold: float = 0.92, keyword_threshold: float = 0.6):
-        """
-        初始化LLM缓存
-
-        Args:
-            max_size: 最大缓存条目数（默认1000）
-            ttl_hours: 缓存过期时间（小时，默认24小时）
-            enable_semantic: 是否启用语义缓存（默认True）
-            enable_keyword: 是否启用关键词缓存（默认True）
-            semantic_threshold: 语义相似度阈值（默认0.92）
-            keyword_threshold: 关键词相似度阈值（默认0.6）
-        """
+                 semantic_threshold: float = 0.90, keyword_threshold: float = 0.66):
         self.max_size = max_size
         self.ttl_hours = ttl_hours
         self.cache = OrderedDict()  # 使用OrderedDict实现LRU

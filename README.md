@@ -463,100 +463,174 @@ SubAgent基于上下文执行任务
 
 ```mermaid
 flowchart TD
-    A[用户输入] --> B{Main Agent<br/>意图识别}
-    B -->|关键词匹配| C{识别意图}
-    B -->|匹配失败| D[LLM辅助判断]
-    D --> C
+    START([系统启动]) --> INIT[初始化流程]
     
-    C -->|分析/调研/爆火| E[Scout Agent<br/>扫榜分析]
-    C -->|大纲/规划| F[Architect Agent<br/>大纲规划]
-    C -->|生成/写/创作| G[Writer Agent<br/>章节生成]
-    C -->|导入/上传| H[FileImporter<br/>文件导入]
-    C -->|查询/查看| I[GenreKnowledgeBase<br/>知识库查询]
-    C -->|版本/回滚| J[VersionManager<br/>版本管理]
+    INIT --> DEP[DependencyInstaller<br/>依赖检测与安装]
+    DEP --> DEP1{检测缺失依赖}
+    DEP1 -->|有缺失| DEP2[自动安装缺失包]
+    DEP2 --> DEP3{包含playwright?}
+    DEP3 -->|是| DEP4[安装Chromium浏览器]
+    DEP3 -->|否| DEP5[继续启动]
+    DEP4 --> DEP5
+    DEP1 -->|无缺失| DEP5
     
-    E --> E1[WebScraper<br/>爬取实时数据]
-    E1 --> E2[ScreenshotTool<br/>页面截图]
-    E2 --> E3[NovelDatabase<br/>数据入库]
-    E3 --> E4[GenreKnowledgeBase<br/>更新爆火特征]
-    E4 --> E5[返回分析结果]
+    DEP5 --> LLM_INIT[LLM客户端初始化]
+    LLM_INIT --> CACHE_INIT[LLMCache初始化<br/>三层缓存架构]
+    CACHE_INIT --> PROGRESS_INIT[ProgressDisplay初始化<br/>进度反馈系统]
+    PROGRESS_INIT --> SCRAPER_INIT[WebScraper初始化<br/>爬虫模块]
+    SCRAPER_INIT --> SCREENSHOT_INIT[ScreenshotTool初始化<br/>截图模块]
+    SCREENSHOT_INIT --> DB_INIT[NovelDatabase初始化<br/>数据库模块]
+    DB_INIT --> KB_INIT[GenreKnowledgeBase初始化<br/>知识库模块]
+    KB_INIT --> READY([系统就绪])
     
-    F --> F1[需求澄清]
-    F1 --> F2[生成分层大纲<br/>总纲→卷纲→弧纲→章节]
-    F2 --> F3[用户确认每层]
-    F3 --> F4[返回大纲规划]
+    READY --> INPUT[用户输入]
+    INPUT --> EXIT_CHECK{检测退出意图}
+    EXIT_CHECK -->|结束/拜拜/退出| EXIT([退出系统])
+    EXIT_CHECK -->|继续| INTENT[Main Agent<br/>意图识别]
     
-    G --> G1[构建上下文<br/>章节规划+真相文件+风格指南]
-    G1 --> G2[生成自检表]
-    G2 --> G3[生成章节正文]
-    G3 --> G4[生成结算表]
-    G4 --> G5[调用Auditor Agent]
+    INTENT --> INTENT1{关键词匹配}
+    INTENT1 -->|匹配成功| INTENT2{识别意图类型}
+    INTENT1 -->|匹配失败| INTENT3[LLM辅助判断]
+    INTENT3 --> INTENT2
     
-    G5 --> K{Auditor Agent<br/>15维度审计}
-    K --> K1[角色OOC检查]
-    K --> K2[时间线一致性]
-    K --> K3[战力一致性]
-    K --> K4[伏笔检查]
-    K --> K5[认知边界检查]
-    K --> K6[物品一致性]
-    K --> K7[世界规则一致性]
-    K --> K8[关系一致性]
-    K --> K9[风格一致性]
-    K --> K10[节奏检查]
-    K --> K11[爽点检查]
-    K --> K12[结尾钩子检查]
-    K --> K13[AI味检查<br/>DeAIChecker]
-    K --> K14[剧情推进检查]
-    K --> K15[读者体验检查]
+    INTENT2 -->|分析/调研/爆火| SCOUT[Scout Agent<br/>扫榜分析]
+    INTENT2 -->|大纲/规划| ARCH[Architect Agent<br/>大纲规划]
+    INTENT2 -->|生成/写/创作| WRITER[Writer Agent<br/>章节生成]
+    INTENT2 -->|导入/上传| FILE[FileImporter<br/>文件导入]
+    INTENT2 -->|查询/查看| KB_QUERY[GenreKnowledgeBase<br/>知识库查询]
+    INTENT2 -->|版本/回滚| VERSION[VersionManager<br/>版本管理]
     
-    K13 --> K13a[检测15种AI句式]
-    K13a --> K13b[统计频率]
-    K13b --> K13c{是否超标?}
-    K13c -->|是| K13d[标记AI味问题]
-    K13c -->|否| K13e[通过AI味检查]
+    SCOUT --> SCOUT1[WebScraper<br/>爬取实时数据]
+    SCOUT1 --> SCOUT2{爬取成功?}
+    SCOUT2 -->|是| SCOUT3[ScreenshotTool<br/>页面截图]
+    SCOUT2 -->|否| SCOUT_FALLBACK[降级: LLM直接分析]
+    SCOUT3 --> SCOUT4{截图成功?}
+    SCOUT4 -->|是| SCOUT5[NovelDatabase<br/>数据入库]
+    SCOUT4 -->|否| SCOUT5
+    SCOUT5 --> SCOUT6[篇幅筛选<br/>短篇≤50万/中篇50-200万/长篇≥200万]
+    SCOUT6 --> SCOUT7[GenreKnowledgeBase<br/>更新爆火特征]
+    SCOUT7 --> SCOUT8[LLMCache查询<br/>三层缓存匹配]
+    SCOUT8 --> SCOUT9{缓存命中?}
+    SCOUT9 -->|第一层: 精确匹配| SCOUT10[返回缓存结果]
+    SCOUT9 -->|第二层: 语义匹配| SCOUT10
+    SCOUT9 -->|第三层: 关键词匹配| SCOUT10
+    SCOUT9 -->|未命中| SCOUT11[调用LLM生成分析]
+    SCOUT11 --> SCOUT12[缓存结果到三层]
+    SCOUT12 --> SCOUT10
+    SCOUT10 --> SCOUT_END[返回分析结果]
+    SCOUT_FALLBACK --> SCOUT_END
     
-    K1 --> L{整体是否通过?}
-    K2 --> L
-    K3 --> L
-    K4 --> L
-    K5 --> L
-    K6 --> L
-    K7 --> L
-    K8 --> L
-    K9 --> L
-    K10 --> L
-    K11 --> L
-    K12 --> L
-    K13d --> L
-    K13e --> L
-    K14 --> L
-    K15 --> L
+    ARCH --> ARCH1[需求澄清]
+    ARCH1 --> ARCH2[生成分层大纲<br/>总纲→卷纲→弧纲→章节]
+    ARCH2 --> ARCH3[用户确认每层]
+    ARCH3 --> ARCH4[LLMCache查询]
+    ARCH4 --> ARCH5{缓存命中?}
+    ARCH5 -->|是| ARCH6[返回缓存结果]
+    ARCH5 -->|否| ARCH7[调用LLM生成]
+    ARCH7 --> ARCH8[缓存结果]
+    ARCH8 --> ARCH6
+    ARCH6 --> ARCH_END[返回大纲规划]
     
-    L -->|通过| M[输出最终版本]
-    L -->|未通过| N{修订轮数<3?}
-    N -->|是| O[Revisor Agent<br/>定点修复]
-    O --> G5
-    N -->|否| P[暂停<br/>等待用户介入]
+    WRITER --> WRITER1[构建上下文<br/>章节规划+真相文件+风格指南]
+    WRITER1 --> WRITER2[LLMCache查询]
+    WRITER2 --> WRITER3{缓存命中?}
+    WRITER3 -->|是| WRITER4[返回缓存结果]
+    WRITER3 -->|否| WRITER5[生成自检表]
+    WRITER5 --> WRITER6[生成章节正文]
+    WRITER6 --> WRITER7[生成结算表]
+    WRITER7 --> WRITER8[调用Auditor Agent]
+    WRITER8 --> AUDIT{Auditor Agent<br/>15维度审计}
     
-    H --> H1[提取元数据]
-    H1 --> H2[提取角色/事件/伏笔]
-    H2 --> H3[分析文笔指纹]
-    H3 --> H4[注入真相文件]
-    H4 --> H5[返回导入结果]
+    AUDIT --> AUDIT1[角色OOC检查]
+    AUDIT --> AUDIT2[时间线一致性]
+    AUDIT --> AUDIT3[战力一致性]
+    AUDIT --> AUDIT4[伏笔检查]
+    AUDIT --> AUDIT5[认知边界检查]
+    AUDIT --> AUDIT6[物品一致性]
+    AUDIT --> AUDIT7[世界规则一致性]
+    AUDIT --> AUDIT8[关系一致性]
+    AUDIT --> AUDIT9[风格一致性]
+    AUDIT --> AUDIT10[节奏检查]
+    AUDIT --> AUDIT11[爽点检查]
+    AUDIT --> AUDIT12[结尾钩子检查]
+    AUDIT --> AUDIT13[AI味检查<br/>DeAIChecker]
+    AUDIT --> AUDIT14[剧情推进检查]
+    AUDIT --> AUDIT15[读者体验检查]
     
-    I --> I1[查询题材数据]
-    I1 --> I2[返回知识库信息]
+    AUDIT13 --> AUDIT13a[检测15种AI句式]
+    AUDIT13a --> AUDIT13b[统计频率]
+    AUDIT13b --> AUDIT13c{是否超标?}
+    AUDIT13c -->|是| AUDIT13d[标记AI味问题]
+    AUDIT13c -->|否| AUDIT13e[通过AI味检查]
     
-    J --> J1[版本快照保存]
-    J1 --> J2[版本比较/回滚]
-    J2 --> J3[返回版本操作结果]
+    AUDIT1 --> AUDIT_RESULT{整体是否通过?}
+    AUDIT2 --> AUDIT_RESULT
+    AUDIT3 --> AUDIT_RESULT
+    AUDIT4 --> AUDIT_RESULT
+    AUDIT5 --> AUDIT_RESULT
+    AUDIT6 --> AUDIT_RESULT
+    AUDIT7 --> AUDIT_RESULT
+    AUDIT8 --> AUDIT_RESULT
+    AUDIT9 --> AUDIT_RESULT
+    AUDIT10 --> AUDIT_RESULT
+    AUDIT11 --> AUDIT_RESULT
+    AUDIT12 --> AUDIT_RESULT
+    AUDIT13d --> AUDIT_RESULT
+    AUDIT13e --> AUDIT_RESULT
+    AUDIT14 --> AUDIT_RESULT
+    AUDIT15 --> AUDIT_RESULT
     
-    E5 --> Q[Main Agent<br/>更新记忆点]
-    F4 --> Q
-    M --> Q
-    H5 --> Q
-    I2 --> Q
-    J3 --> Q
+    AUDIT_RESULT -->|通过| WRITER_END[输出最终版本]
+    AUDIT_RESULT -->|未通过| REVISE_CHECK{修订轮数<3?}
+    REVISE_CHECK -->|是| REVISOR[Revisor Agent<br/>定点修复]
+    REVISOR --> WRITER8
+    REVISE_CHECK -->|否| PAUSE[暂停<br/>等待用户介入]
+    
+    FILE --> FILE1[提取元数据]
+    FILE1 --> FILE2[提取角色/事件/伏笔]
+    FILE2 --> FILE3[分析文笔指纹]
+    FILE3 --> FILE4[注入真相文件]
+    FILE4 --> FILE5[LLMCache查询]
+    FILE5 --> FILE6{缓存命中?}
+    FILE6 -->|是| FILE7[返回缓存结果]
+    FILE6 -->|否| FILE8[调用LLM分析]
+    FILE8 --> FILE9[缓存结果]
+    FILE9 --> FILE7
+    FILE7 --> FILE_END[返回导入结果]
+    
+    KB_QUERY --> KB_QUERY1[查询题材数据]
+    KB_QUERY1 --> KB_QUERY2[LLMCache查询]
+    KB_QUERY2 --> KB_QUERY3{缓存命中?}
+    KB_QUERY3 -->|是| KB_QUERY4[返回缓存结果]
+    KB_QUERY3 -->|否| KB_QUERY5[返回知识库信息]
+    KB_QUERY5 --> KB_QUERY6[缓存结果]
+    KB_QUERY6 --> KB_QUERY4
+    KB_QUERY4 --> KB_QUERY_END[返回查询结果]
+    
+    VERSION --> VERSION1[版本快照保存]
+    VERSION1 --> VERSION2[版本比较/回滚]
+    VERSION2 --> VERSION3[返回版本操作结果]
+    
+    SCOUT_END --> OUTPUT[Main Agent<br/>输出结果]
+    ARCH_END --> OUTPUT
+    WRITER_END --> OUTPUT
+    FILE_END --> OUTPUT
+    KB_QUERY_END --> OUTPUT
+    VERSION3 --> OUTPUT
+    PAUSE --> OUTPUT
+    SCOUT_FALLBACK --> OUTPUT
+    
+    OUTPUT --> MEMORY[更新记忆点<br/>保存到SessionState]
+    MEMORY --> PROGRESS[ProgressDisplay<br/>显示完成状态]
+    PROGRESS --> INPUT
+    
+    style START fill:#e1f5ff
+    style READY fill:#d4edda
+    style EXIT fill:#f8d7da
+    style PAUSE fill:#fff3cd
+    style OUTPUT fill:#d1ecf1
+    style MEMORY fill:#d4edda
+```
     
     Q --> R[保存会话状态]
     R --> S[返回结果给用户]
@@ -2584,12 +2658,12 @@ pip install jieba
 ```python
 # 在 utils/llm_cache.py 中
 cache = LLMCache(
-    max_size=1000,              # 最大缓存条目数
-    ttl_hours=24,               # 缓存过期时间（小时）
+    max_size=2000,              # 最大缓存条目数
+    ttl_hours=168,               # 缓存过期时间（小时）
     enable_semantic=True,       # 启用语义缓存
     enable_keyword=True,        # 启用关键词缓存
-    semantic_threshold=0.92,    # 语义相似度阈值（0-1）
-    keyword_threshold=0.6       # 关键词相似度阈值（0-1）
+    semantic_threshold=0.9,    # 语义相似度阈值（0-1）
+    keyword_threshold=0.66       # 关键词相似度阈值（0-1）
 )
 ```
 
