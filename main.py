@@ -155,13 +155,43 @@ class NovelAgentCLI:
             count = self.novel_db.get_novel_count()
             print(f"已收录小说:{count}部")
     
+    def _detect_exit_intent(self, user_input: str) -> bool:
+        """
+        检测用户是否有退出意图
+        
+        支持精确命令和自然语言表达，如"拜拜"、"结束聊天"、"没事了"等
+        """
+        raw = user_input.strip()
+        lower = raw.lower()
+        
+        # 精确匹配的命令
+        if lower in ['quit', 'exit', 'q', '退出', '再见', '拜拜', 'bye']:
+            return True
+        
+        # 自然语言退出短语（模糊匹配）
+        exit_phrases = [
+            '结束聊天', '结束对话', '结束会话', '退出系统', '退出程序',
+            '不聊了',  '到此为止',  '下线', 
+        ]
+        
+        # 检查是否包含退出短语
+        for phrase in exit_phrases:
+            if phrase in lower:
+                return True
+        
+        # 模式匹配：以"拜"开头且较短
+        if lower.startswith('拜') and len(raw) <= 6:
+            return True
+        
+        return False
+    
     def process_command(self, user_input: str) -> bool:
         """处理用户输入，识别命令或对话"""
         raw_input = user_input.strip()
         lower_input = raw_input.lower()
         
-        # 退出命令
-        if lower_input in ['quit', 'exit', 'q', '退出']:
+        # 退出检测（命令+自然语言）
+        if self._detect_exit_intent(raw_input):
             print("再见")
             return False
         

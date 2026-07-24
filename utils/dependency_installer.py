@@ -74,6 +74,7 @@ class DependencyInstaller:
             'ebooklib': 'ebooklib',
             'pdfplumber': 'pdfplumber',
             'jieba': 'jieba',
+            'playwright': 'playwright',
         }
         
         missing = []
@@ -83,6 +84,43 @@ class DependencyInstaller:
         
         self.missing_deps = missing
         return missing
+    
+    def install_playwright_browsers(self) -> bool:
+        """
+        安装Playwright浏览器（Chromium）
+        
+        Returns:
+            bool: 安装成功返回True
+        """
+        if not self.check_dependency('playwright', 'playwright'):
+            print("  Playwright未安装，跳过浏览器安装")
+            return False
+        
+        try:
+            print("  正在安装Playwright浏览器...", end=' ', flush=True)
+            
+            # 使用python -m playwright install chromium
+            result = subprocess.run(
+                [sys.executable, '-m', 'playwright', 'install', 'chromium'],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5分钟超时（浏览器较大）
+            )
+            
+            if result.returncode == 0:
+                print("✓")
+                return True
+            else:
+                print("✗")
+                print(f"    错误: {result.stderr[:100]}")
+                return False
+        
+        except subprocess.TimeoutExpired:
+            print("✗ (超时)")
+            return False
+        except Exception as e:
+            print(f"✗ ({str(e)[:50]})")
+            return False
     
     def install_package(self, package_name: str) -> bool:
         """
@@ -146,6 +184,11 @@ class DependencyInstaller:
         
         for package_name, import_name in self.missing_deps:
             self.install_package(package_name)
+        
+        # 如果 playwright 刚安装成功，自动安装浏览器
+        if 'playwright' in self.installed_deps:
+            print("\n安装Playwright浏览器（首次使用需要）...")
+            self.install_playwright_browsers()
         
         print("-" * 50)
         print(f"安装完成: {len(self.installed_deps)} 成功, {len(self.failed_deps)} 失败")

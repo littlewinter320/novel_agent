@@ -193,7 +193,8 @@ novel_agent/
 │   ├── llm_cache.py          # LLM缓存机制
 │   ├── web_scraper.py        # 网页爬虫（多平台支持）
 │   ├── screenshot_tool.py    # 截图工具（Playwright）
-│   └── progress_display.py   # 进度反馈系统
+│   ├── progress_display.py   # 进度反馈系统
+│   └── dependency_installer.py # 依赖自动安装器
 │
 ├── templates/                 # Prompt模板
 │   ├── scout_prompt.md
@@ -1519,21 +1520,38 @@ pip install -r requirements.txt
 
 - `playwright`：浏览器自动化工具（用于网页截图）
 
-**安装 Playwright（如需截图功能）：**
+**自动安装说明：**
+
+系统会在以下两个阶段自动检测并安装 Playwright 及浏览器：
+
+```bash
+# 直接启动，系统会自动安装缺失依赖
+python main.py
+```
+
+**自动安装流程：**
+
+1. **启动时**：检测所有必需依赖（包括 playwright），自动安装缺失的 Python 包
+2. **首次截图时**：检测 Chromium 浏览器是否已安装，如果未安装则自动安装
+3. 使用清华镜像源加速下载
+4. 安装状态会在进程内缓存，避免重复检测
+
+**手动安装 Playwright（可选）：**
 
 ```bash
 # 安装 playwright 库
 pip install playwright
 
-# 安装浏览器（必须执行，会下载 Chromium 等浏览器）
-playwright install chromium
+# 安装浏览器（使用 Python 模块方式，更可靠）
+python -m playwright install chromium
 ```
 
 **注意：**
 
 - Playwright 仅用于截图功能，不影响核心功能
 - 未安装 Playwright 时，系统会优雅降级，跳过截图步骤
-- 首次运行 `playwright install` 需要下载浏览器，可能需要几分钟
+- 首次安装浏览器需要下载 Chromium，可能需要几分钟
+- 如果自动安装失败，请手动执行上述命令
 
 #### 4. 配置API密钥
 

@@ -44,13 +44,42 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
-# 尝试导入Playwright
+# 尝试导入Playwright（仅检测包是否安装，浏览器检测延迟到实际使用时）
 try:
     from playwright.sync_api import sync_playwright
-    PLAYWRIGHT_AVAILABLE = True
+    import subprocess
+    # 尝试启动浏览器检测是否已安装
+    try:
+        pw = sync_playwright().start()
+        browser = pw.chromium.launch(headless=True)
+        browser.close()
+        pw.stop()
+        PLAYWRIGHT_AVAILABLE = True
+    except Exception as e:
+        # 浏览器未安装，尝试自动安装
+        print("检测到Playwright已安装，但浏览器未安装，正在自动安装...")
+        try:
+            # 使用python -m确保使用正确的Python环境
+            result = subprocess.run(
+                [sys.executable, '-m', 'playwright', 'install', 'chromium'],
+                capture_output=True,
+                timeout=300  # 5分钟超时
+            )
+            if result.returncode == 0:
+                PLAYWRIGHT_AVAILABLE = True
+                print("浏览器安装完成")
+            else:
+                PLAYWRIGHT_AVAILABLE = False
+                print(f"浏览器安装失败: {result.stderr[:100]}")
+        except Exception as install_error:
+            PLAYWRIGHT_AVAILABLE = False
+            print(f"浏览器安装失败: {str(install_error)[:100]}")
 except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
+    PLAYWRIGHT_PKG_AVAILABLE = False
     sync_playwright = None
+
+# 浏览器安装状态（运行时动态检测）
+_browser_installed = None  # None=未检测, True=已安装, False=安装失败
 
 
 class ScreenshotTool:
@@ -93,15 +122,64 @@ class ScreenshotTool:
         self.page = None
         
         # 记录playwright可用性
-        self.available = PLAYWRIGHT_AVAILABLE
+        self.available = PLAYWRIGHT_PKG_AVAILABLE
         if not self.available:
             print("提示: playwright未安装，截图功能不可用（非关键功能）")
     
+    def _install_browser(self):
+        """自动安装Playwright浏览器"""
+        import subprocess
+        print("浏览器未安装，正在自动安装Chromium...")
+        try:
+            result = subprocess.run(
+                [sys.executable, '-m', 'playwright', 'install', 'chromium'],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            if result.returncode == 0:
+                print("浏览器安装完成")
+                return True
+            else:
+                print(f"浏览器安装失败: {result.stderr[:100]}")
+                return False
+        except Exception as e:
+            print(f"浏览器安装失败: {str(e)[:100]}")
+            return False
+    
     def _init_browser(self):
-        """初始化浏览器"""
-        if not self.available:
+        """初始化浏览器
+        
+        流程：
+        1. 检查Playwright包是否安装
+        2. 检查浏览器是否已安装（运行时检测）
+        3. 如果浏览器未安装，自动安装
+        4. 初始化浏览器实例
+        """
+        global _browser_installed
+        
+        if not PLAYWRIGHT_PKG_AVAILABLE:
             return False
         
+        # 首次使用时检测浏览器
+        if _browser_installed is None:
+            try:
+                # 尝试启动浏览器检测是否已安装
+                pw = sync_playwright().start()
+                browser = pw.chromium.launch(headless=True)
+                browser.close()
+                pw.stop()
+                _browser_installed = True
+            except Exception:
+                # 浏览器未安装，尝试自动安装
+                print("检测到浏览器未安装，正在自动安装...")
+                _browser_installed = self._install_browser()
+        
+        # 浏览器未安装且安装失败
+        if not _browser_installed:
+            return False
+        
+        # 初始化浏览器实例
         if self.browser is None:
             try:
                 self.playwright = sync_playwright().start()
