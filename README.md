@@ -144,7 +144,6 @@ novel_agent/
 ├── main.py                    # 主程序入口
 ├── config.py                  # 配置管理
 ├── requirements.txt           # 依赖列表
-├── pyproject.toml             # 项目构建配置（setuptools）
 ├── README.md                  # 项目文档
 ├── .env.example               # 环境变量示例
 ├── .gitignore                 # Git忽略规则
