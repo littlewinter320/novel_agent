@@ -74,6 +74,7 @@ class DependencyInstaller:
             'ebooklib': 'ebooklib',
             'pdfplumber': 'pdfplumber',
             'jieba': 'jieba',
+            'duckduckgo-search': 'duckduckgo_search',
         }
         
         missing = []

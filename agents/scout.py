@@ -38,10 +38,8 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 from utils.llm_client import get_llm_client
-from utils.web_scraper import get_web_scraper
-from utils.screenshot_tool import get_screenshot_tool
+from utils.web_search import get_web_search
 from utils.progress_display import get_progress_display
-from core.novel_database import get_novel_database
 from core.genre_knowledge import get_genre_knowledge_base
 
 
@@ -75,15 +73,14 @@ class ScoutAgent:
         初始化流程:
         1. 获取LLM客户端（用于搜索和分析）
         2. 获取题材知识库实例（用于查询题材规范）
-        3. 初始化爬虫、截图、数据库、进度显示模块
+        3. 初始化搜索、进度显示模块
         4. 初始化分析缓存（避免重复分析）
         """
         self.llm_client = get_llm_client()
         self.genre_knowledge_base = get_genre_knowledge_base()
-        # 新增模块：爬虫、截图、数据库、进度显示
-        self.web_scraper = get_web_scraper()
-        self.screenshot_tool = get_screenshot_tool()
-        self.novel_db = get_novel_database()
+        # 搜索模块和进度显示
+        self.web_search = get_web_search()
+        self.web_search.set_llm_client(self.llm_client)
         self.progress = get_progress_display()
         self._analysis_cache = {}
     
@@ -157,12 +154,12 @@ class ScoutAgent:
     def search_hot_novels(self, genre: str, constraints: Dict[str, Any] = None, 
                          platform: str = "番茄小说") -> List[Dict[str, Any]]:
         """
-        搜索热门作品（优先使用真实爬虫）
+        搜索热门作品（使用网络搜索）
         
         实现逻辑:
-        1. 优先使用爬虫从指定平台获取真实数据
-        2. 爬取的数据自动入库保存
-        3. 爬虫失败时降级为LLM搜索
+        1. 使用网络搜索获取热门小说数据
+        2. 如果指定平台，优先搜索该平台
+        3. 返回结构化的小说列表
         
         Args:
             genre: 题材名称
@@ -179,89 +176,32 @@ class ScoutAgent:
             - tags: 标签列表
             - url: 作品链接
         """
-        # 尝试使用爬虫获取真实数据
-        crawled_novels = self._crawl_platform_data(platform, genre)
-        
-        if crawled_novels:
-            # 爬虫成功，保存数据到数据库
-            self._save_crawled_data(crawled_novels, platform, genre)
-            return crawled_novels
-        
-        # 爬虫失败，降级为LLM搜索
-        print(f"爬虫获取数据失败，使用LLM搜索模式...")
-        return self._llm_search_hot_novels(genre, constraints)
-    
-    def _crawl_platform_data(self, platform: str, genre: str) -> List[Dict[str, Any]]:
-        """
-        从指定平台爬取热门小说数据
-        
-        Args:
-            platform: 平台名称
-            genre: 题材名称
-        
-        Returns:
-            爬取到的小说列表，失败返回空列表
-        """
         try:
-            self.progress.start_task(f"正在从{platform}爬取{genre}类热门小说...", total=1)
+            self.progress.start_task(f"正在搜索{platform}的{genre}类热门小说...", total=1)
             
-            # 调用爬虫模块
-            crawl_result = self.web_scraper.crawl_platform(platform, genre, limit=10)
+            # 构造搜索查询
+            query = f"{platform} {genre} 热门小说"
+            if constraints:
+                if "protagonist_type" in constraints:
+                    query += f" {constraints['protagonist_type']}"
+                if "target_audience" in constraints:
+                    query += f" {constraints['target_audience']}"
             
-            if "error" in crawl_result:
-                self.progress.fail_task(f"爬取失败: {crawl_result['error']}")
+            # 调用搜索模块
+            search_result = self.web_search.search(query)
+            
+            if "error" in search_result:
+                self.progress.fail_task(f"搜索失败: {search_result['error']}")
                 return []
             
-            novels = crawl_result.get("novels", [])
+            novels = search_result.get("results", [])
             self.progress.complete_task(f"成功获取{len(novels)}部小说数据")
-            
-            # 截图保存（可选）
-            if crawl_result.get("url"):
-                try:
-                    screenshot_result = self.screenshot_tool.take_screenshot(
-                        crawl_result["url"],
-                        filename=f"{platform}_{genre}_ranking"
-                    )
-                    if "error" not in screenshot_result:
-                        print(f"页面截图已保存: {screenshot_result.get('screenshot_path')}")
-                except Exception as e:
-                    print(f"截图失败（非关键功能）: {e}")
             
             return novels
             
         except Exception as e:
-            print(f"爬取平台数据失败: {e}")
+            print(f"搜索热门小说失败: {e}")
             return []
-    
-    def _save_crawled_data(self, novels: List[Dict[str, Any]], platform: str, genre: str):
-        """
-        保存爬取的数据到数据库
-        
-        Args:
-            novels: 小说列表
-            platform: 平台名称
-            genre: 题材名称
-        """
-        try:
-            saved_count = 0
-            for novel in novels:
-                # 补充平台和题材信息
-                novel["platform"] = platform
-                novel["genre"] = genre
-                
-                # 保存到数据库
-                novel_id = self.novel_db.save_novel(novel)
-                if novel_id > 0:
-                    saved_count += 1
-            
-            # 记录爬取日志
-            crawl_url = f"https://{platform}.com/rank/{genre}"
-            self.novel_db.log_crawl(platform, genre, crawl_url, "success", f"爬取{len(novels)}部小说", len(novels))
-            
-            print(f"数据入库完成: 新增/更新{saved_count}部小说")
-            
-        except Exception as e:
-            print(f"保存爬取数据失败: {e}")
     
     def _llm_search_hot_novels(self, genre: str, constraints: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
