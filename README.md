@@ -1891,8 +1891,8 @@ LLM_PROVIDER = "deepseek"
 LLM_MODEL = "deepseek-chat"
 LLM_API_KEY = "your-api-key-here"
 LLM_BASE_URL = "https://api.deepseek.com/v1"
-LLM_TEMPERATURE = 0.7  # 温度参数（0.0-2.0）
-LLM_MAX_TOKENS = 8192  # 最大输出token数
+LLM_TEMPERATURE = 0.75  # 温度参数（0.0-2.0）
+LLM_MAX_TOKENS = 262144  # 最大输出token数
 ```
 
 **注意：** 不同模型有不同的参数限制
