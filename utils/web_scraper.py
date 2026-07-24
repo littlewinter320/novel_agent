@@ -105,6 +105,7 @@ class WebScraper:
             "base_url": "https://fanqienovel.com",
             "home_url": "https://fanqienovel.com",
             "ranking_url": "https://fanqienovel.com/rank",
+            "search_url": "https://fanqienovel.com/search",
             "genre_map": {
                 "都市": "/rank/1_2_261",  # 都市日常
                 "玄幻": "/rank/1_2_257",  # 玄幻脑洞
@@ -119,6 +120,7 @@ class WebScraper:
             "base_url": "https://www.qidian.com",
             "home_url": "https://www.qidian.com",
             "ranking_url": "https://www.qidian.com/rank",
+            "search_url": "https://www.qidian.com/search",
             "genre_map": {
                 "都市": "都市",
                 "玄幻": "玄幻",
@@ -133,6 +135,7 @@ class WebScraper:
             "base_url": "https://www.qimao.com",
             "home_url": "https://www.qimao.com",
             "ranking_url": "https://www.qimao.com/rank",
+            "search_url": "https://www.qimao.com/search",
             "genre_map": {
                 "都市": "dushi",
                 "玄幻": "xuanhuan",
@@ -410,6 +413,51 @@ class WebScraper:
                 continue
         
         return novels
+    
+    def search_by_keyword(self, platform: str, keyword: str, limit: int = 10) -> Dict[str, Any]:
+        """
+        根据关键词搜索小说（核心功能：支持用户任意关键词搜索）
+        
+        Args:
+            platform: 平台名称（fanqie/qidian/qimao）
+            keyword: 搜索关键词
+            limit: 返回数量限制
+        
+        Returns:
+            搜索结果字典
+        """
+        platform_config = self.PLATFORM_URLS.get(platform)
+        if not platform_config:
+            return {"error": f"不支持的平台: {platform}"}
+        
+        # 构建搜索URL（不同平台的搜索接口格式不同）
+        if platform == "fanqie":
+            # 番茄小说搜索格式: https://fanqienovel.com/search?keyword=xxx
+            search_url = f"{platform_config['search_url']}?keyword={keyword}"
+        elif platform == "qidian":
+            # 起点中文网搜索格式: https://www.qidian.com/search?kw=xxx
+            search_url = f"{platform_config['search_url']}?kw={keyword}"
+        elif platform == "qimao":
+            # 七猫小说搜索格式: https://www.qimao.com/search/index?kw=xxx
+            search_url = f"{platform_config['search_url']}/index?kw={keyword}"
+        else:
+            return {"error": f"平台{platform}不支持搜索功能"}
+        
+        # 爬取搜索页面
+        html = self._fetch_page(search_url)
+        if not html:
+            return {"error": "搜索页面爬取失败"}
+        
+        # 解析搜索结果
+        novels = self._parse_novels(html, platform)
+        
+        return {
+            "platform": platform_config["name"],
+            "keyword": keyword,
+            "novels": novels[:limit],
+            "crawled_at": datetime.now().isoformat(),
+            "url": search_url
+        }
     
     def crawl_all_platforms(self, genre: str, limit: int = 10) -> Dict[str, Any]:
         """

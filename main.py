@@ -75,13 +75,13 @@ class NovelAgentCLI:
         # 检查LLM提供商
         if config.LLM_PROVIDER not in ['deepseek', 'kimi', 'glm', 'openai', 'claude', 'custom']:
             print(f"错误：不支持的LLM提供商 {config.LLM_PROVIDER}")
-            print("请在.env或config.py中设置LLM_PROVIDER")
+            print("请在config.py中设置LLM_PROVIDER")
             return False
         
         # 检查API密钥
         if not config.LLM_API_KEY:
             print("错误：未检测到API密钥")
-            print("请在.env或config.py中设置LLM_API_KEY")
+            print("请在config.py中设置LLM_API_KEY")
             return False
         
         # 测试API连接
@@ -227,43 +227,68 @@ class NovelAgentCLI:
     
     def _detect_crawl_intent(self, user_input: str) -> Dict[str, Any]:
         """
-        检测用户输入是否包含爬取意图
+        检测用户输入是否包含爬取或搜索意图
 
         返回：
-            {"need_crawl": bool, "platform": str, "genre": str, "length": str, "keywords": list}
+            {
+                "need_crawl": bool,           # 是否需要爬取/搜索
+                "search_type": str,           # search_type: "keyword" | "ranking" | "normal"
+                "platform": str,              # 平台（fanqie/qidian/qimao）
+                "genre": str,                 # 题材
+                "length": str,                # 篇幅（短篇/中篇/长篇）
+                "keywords": list,             # 用户输入的搜索关键词
+                "user_input": str             # 原始用户输入
+            }
         """
         # 平台关键词映射（返回爬虫模块期望的英文标识符）
         platform_keywords = {
-            "fanqie": ["番茄", "fanqie", "番茄小说"],
-            "qidian": ["起点", "qidian", "起点中文网"],
-            "qimao": ["七猫", "qimao", "七猫小说"],
+            "fanqie": ["番茄", "fanqie", "番茄小说", "番茄网"],
+            "qidian": ["起点", "qidian", "起点中文网", "起点网"],
+            "qimao": ["七猫", "qimao", "七猫小说", "七猫网"],
         }
         
-        # 题材关键词映射
+        # 题材关键词映射（扩充更多口语化表达）
         genre_keywords = {
-            "游戏": ["游戏", "网游", "系统流", "升级", "副本"],
-            "玄幻": ["玄幻", "修仙", "仙侠", "修真"],
-            "都市": ["都市", "现代", "城市", "职场"],
-            "科幻": ["科幻", "未来", "太空", "星际"],
-            "历史": ["历史", "古代", "穿越", "架空"],
-            "悬疑": ["悬疑", "推理", "侦探", "恐怖"],
+            "游戏": ["游戏", "网游", "系统流", "升级", "副本", "电竞", "网游之"],
+            "玄幻": ["玄幻", "修仙", "仙侠", "修真", "玄幻小说", "修仙小说"],
+            "都市": ["都市", "现代", "城市", "职场", "都市小说", "现代都市"],
+            "科幻": ["科幻", "未来", "太空", "星际", "科幻小说", "末世"],
+            "历史": ["历史", "古代", "穿越", "架空", "历史小说", "古代言情"],
+            "悬疑": ["悬疑", "推理", "侦探", "恐怖", "悬疑小说", "惊悚"],
+            "言情": ["言情", "爱情", "甜宠", "虐恋", "言情小说"],
+            "重生": ["重生", "重生之", "重生小说"],
+            "穿越": ["穿越", "穿越小说", "穿越时空"],
+            "宫斗": ["宫斗", "宫斗小说"],
+            "宅斗": ["宅斗", "宅斗小说"],
+            "古言": ["古言", "古代言情"],
         }
 
         # 篇幅约束映射
         # 短篇: ≤50万字  中篇: 50~200万字  长篇: ≥200万字
         length_keywords = {
-            "短篇": ["短篇", "短一点", "不要太长", "字数少", "50万以内", "50万字以内"],
-            "中篇": ["中篇", "中等长度", "100万字", "100~200万"],
-            "长篇": ["长篇", "长篇大论", "200万字", "200万字以上"],
+            "短篇": ["短篇", "短一点", "不要太长", "字数少", "50万以内", "50万字以内", "短篇小说"],
+            "中篇": ["中篇", "中等长度", "100万字", "100~200万", "中篇小说"],
+            "长篇": ["长篇", "长篇大论", "200万字", "200万字以上", "长篇小说"],
         }
 
-        # 检测爬取意图关键词
-        crawl_triggers = ["查看", "爬取", "最新", "热门", "爆款", "排行榜",
-                         "榜单", "有什么", "推荐", "搜索", "找找", "看看",
-                         "寻找", "找", "匹配", "筛选"]
+        # 扩充触发词列表，支持更多口语化表达
+        # 意图词 + 领域词的组合方式，提高识别准确率
+        intent_triggers = [
+            # 意图词：表示用户想要做什么
+            "查看", "爬取", "最新", "热门", "爆款", "排行榜", "榜单",
+            "有什么", "推荐", "搜索", "找找", "看看", "寻找", "找",
+            "匹配", "筛选", "查询", "搜索一下", "搜搜", "搜",
+            "想看", "想读", "了解", "了解一下", "关注",
+            # 领域词：表示用户关注的领域
+            "小说", "书", "网文", "作品", "书籍",
+            # 组合表达
+            "有什么好看的", "有什么推荐", "推荐几本",
+            "什么好看", "哪本好看", "热门的", "最近火的",
+        ]
 
-        need_crawl = any(trigger in user_input for trigger in crawl_triggers)
-        
+        # 检测是否有爬取/搜索意图
+        has_intent = any(trigger in user_input for trigger in intent_triggers)
+
         # 识别平台
         detected_platform = ""
         for platform, keywords in platform_keywords.items():
@@ -285,11 +310,56 @@ class NovelAgentCLI:
                 detected_length = length
                 break
 
+        # 提取用户输入中的搜索关键词（去除已识别的平台/题材/篇幅词）
+        # 保留用户真正想搜索的内容
+        all_known_keywords = set()
+        for keywords in platform_keywords.values():
+            all_known_keywords.update(keywords)
+        for keywords in genre_keywords.values():
+            all_known_keywords.update(keywords)
+        for keywords in length_keywords.values():
+            all_known_keywords.update(keywords)
+        all_known_keywords.update(intent_triggers)
+
+        # 从用户输入中提取真正的搜索关键词
+        import re
+        # 先去除常见标点和空格
+        clean_input = re.sub(r'[，。！？、；：\s]+', ' ', user_input).strip()
+        # 去除已识别的关键词，保留剩余部分作为搜索关键词
+        remaining = clean_input
+        for kw in sorted(all_known_keywords, key=len, reverse=True):
+            remaining = remaining.replace(kw, '')
+        # 去除多余空格
+        remaining = ' '.join(remaining.split()).strip()
+
+        # 判断搜索类型
+        # 1. 如果有剩余关键词，优先按关键词搜索
+        # 2. 如果只有题材+平台，按榜单爬取
+        # 3. 否则为普通对话
+        search_type = "normal"
+        search_keywords = []
+        
+        if remaining:
+            # 用户有明确的搜索词（如"末日生存"、"无敌流"等）
+            search_type = "keyword"
+            search_keywords = [remaining]
+            # 如果剩余词太长，尝试按标点分割成多个关键词
+            if len(remaining) > 10:
+                search_keywords = re.split(r'[，。！？、；：\s]+', user_input)
+                search_keywords = [k.strip() for k in search_keywords if k.strip()]
+                # 过滤掉已知关键词
+                search_keywords = [k for k in search_keywords if k not in all_known_keywords]
+        elif has_intent and (detected_genre or detected_platform):
+            # 用户只提到了题材或平台，按榜单爬取
+            search_type = "ranking"
+
         return {
-            "need_crawl": need_crawl,
+            "need_crawl": has_intent,
+            "search_type": search_type,
             "platform": detected_platform,
             "genre": detected_genre,
             "length": detected_length,
+            "keywords": search_keywords,
             "user_input": user_input
         }
     
@@ -298,27 +368,196 @@ class NovelAgentCLI:
         智能对话处理：自动识别意图并执行
         
         流程：
-        1. 检测用户意图（是否需要爬取数据）
-        2. 如果需要爬取 → 执行爬虫 → 数据入库 → 截图 → 分析
-        3. 如果不需要 → 普通LLM对话
+        1. 检测用户意图（关键词搜索 / 榜单爬取 / 普通对话）
+        2. 关键词搜索：优先使用用户提供的词进行联网搜索
+        3. 榜单爬取：根据平台+题材爬取排行榜数据
+        4. 普通对话：直接使用LLM回复
         """
         if not self.llm_client:
             print("LLM未初始化")
             return True
         
         try:
-            # 1. 检测爬取意图
+            # 1. 检测爬取/搜索意图
             intent = self._detect_crawl_intent(user_input)
             
-            if intent["need_crawl"] and (intent["platform"] or intent["genre"]):
+            # 2. 根据搜索类型执行不同策略
+            # 优先级：关键词搜索 > 榜单爬取 > 普通对话
+            if intent["search_type"] == "keyword":
+                # 用户提供了明确的搜索关键词，优先联网搜索
+                return self._handle_keyword_search(intent)
+            elif intent["search_type"] == "ranking" and (intent["platform"] or intent["genre"]):
+                # 用户只提到平台或题材，爬取排行榜
                 return self._handle_crawl_and_analyze(intent)
+            elif intent["need_crawl"]:
+                # 有爬取意图但未明确搜索类型，尝试关键词搜索或降级到榜单
+                if intent["keywords"]:
+                    return self._handle_keyword_search(intent)
+                elif intent["platform"] or intent["genre"]:
+                    return self._handle_crawl_and_analyze(intent)
             
-            # 2. 普通对话
+            # 3. 普通对话
             return self._handle_normal_conversation(user_input)
             
         except Exception as e:
             print(f"错误:{e}")
             return True
+    
+    def _handle_keyword_search(self, intent: Dict[str, Any]) -> bool:
+        """
+        根据用户提供的关键词进行联网搜索（核心优化：支持任意关键词搜索）
+        
+        流程：
+        1. 显示进度 → 2. 使用用户关键词联网搜索 → 3. 数据入库 → 4. 截图 → 5. 篇幅筛选 → 6. LLM分析
+        """
+        platform = intent["platform"] or "fanqie"
+        keywords = intent["keywords"] or []
+        user_input = intent["user_input"]
+        length = intent.get("length", "")
+        
+        # 如果没有关键词，尝试从用户输入中提取
+        if not keywords:
+            keywords = [user_input]
+        
+        # 使用第一个关键词进行搜索（可以扩展为多关键词搜索）
+        search_keyword = keywords[0]
+
+        # 步骤1：使用关键词搜索
+        self.progress.start_task(f"正在搜索关键词「{search_keyword}」...", total=3)
+        
+        self.progress.update_progress(1, f"连接{platform}搜索...")
+        search_result = self.scraper.search_by_keyword(platform, search_keyword, limit=10)
+
+        if "error" in search_result:
+            self.progress.fail_task(f"搜索失败: {search_result['error']}")
+            # 降级：使用LLM直接分析或尝试榜单爬取
+            print(f"\n无法通过关键词搜索获取数据，尝试其他方式...")
+            # 如果有关联题材，尝试按题材爬取榜单
+            if intent.get("genre"):
+                intent["search_type"] = "ranking"
+                return self._handle_crawl_and_analyze(intent)
+            return self._handle_normal_conversation(user_input)
+
+        novels = search_result.get("novels", [])
+        self.progress.update_progress(2, f"搜索到{len(novels)}部相关小说")
+
+        # 步骤2：数据入库
+        self.progress.update_progress(3, "数据入库中...")
+        saved_count = 0
+        for novel in novels:
+            novel["platform"] = platform
+            novel["genre"] = intent.get("genre", "")
+            novel_id = self.novel_db.save_novel(novel)
+            if novel_id > 0:
+                saved_count += 1
+
+        # 记录爬取日志
+        search_url = search_result.get("url", "")
+        self.novel_db.log_crawl(platform, f"搜索:{search_keyword}", search_url, "success", f"搜索{len(novels)}部小说", len(novels))
+        self.progress.complete_task(f"数据入库完成，新增/更新{saved_count}部小说")
+
+        # 步骤3：截图（如果浏览器可用）
+        screenshot_path = None
+        if search_result.get("url"):
+            self.progress.start_task("正在截取搜索结果页面...", total=1)
+            screenshot_result = self.screenshot_tool.take_screenshot(
+                search_result["url"],
+                filename=f"{platform}_search_{search_keyword[:10]}"
+            )
+            if "error" not in screenshot_result:
+                screenshot_path = screenshot_result.get("screenshot_path")
+                self.progress.complete_task(f"截图已保存: {screenshot_path}")
+            else:
+                self.progress.fail_task("截图失败（浏览器未安装，非关键功能）")
+
+        # 步骤4：根据篇幅要求筛选小说
+        if length:
+            self.progress.start_task(f"正在筛选{length}小说...", total=1)
+            filtered_novels = self._filter_novels_by_length(novels, length)
+            if filtered_novels:
+                self.progress.complete_task(f"筛选完成，找到{len(filtered_novels)}部符合条件的小说")
+                novels = filtered_novels
+            else:
+                self.progress.fail_task(f"未找到符合{length}要求的小说")
+
+        # 步骤5：LLM综合分析
+        self.progress.start_task("正在生成分析报告...", total=1)
+        analysis = self._generate_keyword_analysis(novels, search_keyword, platform, user_input, length)
+        self.progress.complete_task("分析完成")
+
+        # 输出结果
+        print(f"\n{analysis}")
+
+        # 保存对话历史
+        self.conversation_history.append({"role": "user", "content": user_input})
+        self.conversation_history.append({"role": "assistant", "content": analysis})
+
+        return True
+    
+    def _generate_keyword_analysis(self, novels: list, keyword: str, platform: str,
+                                  user_input: str, length: str = "") -> str:
+        """让LLM基于关键词搜索结果生成分析报告"""
+        novel_data = json.dumps(novels[:10], ensure_ascii=False, indent=2)
+
+        # 构建篇幅约束说明
+        length_constraint = ""
+        if length == "短篇":
+            length_constraint = """
+【重要约束】用户要求短篇作品（≤50万字）。
+**关键要求**：
+- 如果小说数据中有 `word_count` 字段，必须严格筛选字数≤50万字的作品
+- 如果数据中**没有字数信息**，你必须在回答开头明确声明："**注意：爬取的数据中未提供字数信息，无法确定篇幅是否符合要求。以下推荐未经验证篇幅。**"
+- 绝对不要假装知道字数，不要编造字数信息
+"""
+        elif length == "中篇":
+            length_constraint = """
+【重要约束】用户要求中篇作品（50-200万字）。
+**关键要求**：
+- 如果小说数据中有 `word_count` 字段，必须严格筛选字数在50-200万字之间的作品
+- 如果数据中**没有字数信息**，你必须在回答开头明确声明："**注意：爬取的数据中未提供字数信息，无法确定篇幅是否符合要求。以下推荐未经验证篇幅。**"
+- 绝对不要假装知道字数，不要编造字数信息
+"""
+        elif length == "长篇":
+            length_constraint = """
+【重要约束】用户要求长篇作品（≥200万字）。
+**关键要求**：
+- 如果小说数据中有 `word_count` 字段，必须严格筛选字数≥200万字的作品
+- 如果数据中**没有字数信息**，你必须在回答开头明确声明："**注意：爬取的数据中未提供字数信息，无法确定篇幅是否符合要求。以下推荐未经验证篇幅。**"
+- 绝对不要假装知道字数，不要编造字数信息
+"""
+
+        prompt = f"""你是一个专业的网络小说市场分析师。基于以下从{platform}实时搜索的「{keyword}」相关小说数据，为用户提供分析。
+
+用户问题：{user_input}
+{length_constraint}
+实时搜索结果（关键词：{keyword}）：
+{novel_data}
+
+**重要检查**：
+请先检查上述数据中每部小说是否包含 `word_count` 字段。
+- 如果所有小说都**没有** `word_count` 字段，你必须在回答的**第一行**用粗体声明："**注意：爬取的数据中未提供字数信息，无法按篇幅筛选。以下推荐未经验证篇幅。**"
+- 如果部分小说有 `word_count`，只推荐符合篇幅要求的作品
+- 绝对不要编造或猜测字数
+
+请基于以上真实搜索数据回答用户问题，要求：
+1. 引用具体的小说名称和数据
+2. 分析这些作品与关键词「{keyword}」的关联性
+3. 分析这些作品的共同爆火特征（如果有关键词相关的特征请特别指出）
+4. 给出创作建议（特别是如何写好「{keyword}」相关的小说）
+5. 如果不是爽文方向，特别说明如何在保持吸引力的同时避免纯爽文套路
+6. 如果有篇幅约束且有字数数据，必须严格遵守并筛选符合要求的作品
+
+注意：以上数据是从{platform}实时搜索的真实数据，请基于此分析。"""
+        
+        try:
+            response = self.llm_client.chat_with_system(
+                system_prompt="你是专业的网络小说市场分析师，基于真实搜索数据提供分析。",
+                user_message=prompt,
+                history=[]
+            )
+            return response
+        except Exception as e:
+            return f"分析生成失败: {e}"
     
     def _handle_crawl_and_analyze(self, intent: Dict[str, Any]) -> bool:
         """

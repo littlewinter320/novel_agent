@@ -481,34 +481,44 @@ class LLMCache:
             return False
         return True
     
-    def get(self, prompt: str, system_prompt: str = None, 
-           llm_client=None, temperature: float = None) -> Dict[str, Any]:
+    def lookup(self, prompt: str, system_prompt: str = None, 
+              temperature: float = None) -> Dict[str, Any]:
         """
-        获取LLM响应（优先从缓存）
+        查询缓存（只查不写，绝不调用LLM）
         
         实现逻辑:
         1. 参数归一化：temperature>0.1不缓存
         2. 第一层：精确匹配（MD5哈希，O(1)查询）
         3. 第二层：语义匹配（embedding余弦相似度）
         4. 第三层：关键词匹配（Jaccard相似度）
-        5. 全部未命中则调用LLM并缓存到三层
+        5. 全部未命中则返回cached=False
         
         Args:
             prompt: 用户提示
             system_prompt: 系统提示（可选）
-            llm_client: LLM客户端（缓存未命中时使用）
             temperature: LLM温度参数（可选）
         
         Returns:
-            响应结果字典
+            响应结果字典，cached=True表示命中，cached=False表示未命中
         """
         self.stats["total_requests"] += 1
         
         # 参数归一化：非确定性请求不缓存
         if not self._should_cache(temperature):
             self.stats["cache_misses"] += 1
-            # 直接调用LLM
-            return self._call_llm(prompt, system_prompt, llm_client, skip_cache=True)
+            return {
+                "cached": False,
+                "cache_layer": None,
+                "similarity": 0.0,
+                "response": None,
+                "token_usage": {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0
+                },
+                "tokens_saved": 0,
+                "cache_stats": self.get_stats()
+            }
         
         cache_key = self._generate_key(prompt, system_prompt)
         
@@ -603,7 +613,28 @@ class LLMCache:
         
         # ==================== 全部未命中 ====================
         self.stats["cache_misses"] += 1
-        return self._call_llm(prompt, system_prompt, llm_client, cache_key=cache_key)
+        return {
+            "cached": False,
+            "cache_layer": None,
+            "similarity": 0.0,
+            "response": None,
+            "token_usage": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+            },
+            "tokens_saved": 0,
+            "cache_stats": self.get_stats()
+        }
+    
+    def get(self, prompt: str, system_prompt: str = None, 
+           llm_client=None, temperature: float = None) -> Dict[str, Any]:
+        """
+        兼容性方法（已废弃，保留向后兼容）
+        
+        请使用 lookup() + store() 替代
+        """
+        return self.lookup(prompt, system_prompt, temperature)
     
     def _call_llm(self, prompt: str, system_prompt: str = None, 
                  llm_client=None, cache_key: str = None, skip_cache: bool = False) -> Dict[str, Any]:
@@ -856,6 +887,56 @@ class LLMCache:
             "layer_breakdown": layer_breakdown,
             "recommendations": recommendations
         }
+    
+    def set(self, prompt: str, response: str, system_prompt: str = None, temperature: float = None) -> bool:
+        """
+        手动设置缓存（用于LLMClient集成）
+        
+        Args:
+            prompt: 用户提示
+            response: LLM响应
+            system_prompt: 系统提示（可选）
+            temperature: 温度参数（可选）
+        
+        Returns:
+            是否成功设置缓存
+        """
+        # 检查是否应该缓存
+        if not self._should_cache(temperature):
+            return False
+        
+        cache_key = self._generate_key(prompt, system_prompt)
+        
+        # 估算token使用
+        prompt_tokens = len(prompt) // 2
+        completion_tokens = len(response) // 2
+        token_count = prompt_tokens + completion_tokens
+        
+        # 存储到主缓存
+        self.cache[cache_key] = {
+            "prompt": prompt,
+            "system_prompt": system_prompt,
+            "response": response,
+            "token_count": token_count,
+            "cached_at": datetime.now().isoformat()
+        }
+        
+        # 存储到语义索引
+        if self.semantic_index and self.semantic_index.is_available():
+            self.semantic_index.add(cache_key, prompt, response)
+        
+        # 存储到关键词索引
+        if self.keyword_index and self.keyword_index.is_available():
+            self.keyword_index.add(cache_key, prompt, response)
+        
+        # 维护缓存大小
+        if len(self.cache) > self.max_size:
+            self.cache.popitem(last=False)  # 移除最旧的
+        
+        # 保存缓存
+        self._save_cache()
+        
+        return True
 
 
 # 全局实例

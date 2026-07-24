@@ -177,10 +177,19 @@ class LLMClient:
                 raise ImportError("请先安装anthropic库: pip install anthropic")
             
             self.client = anthropic.Anthropic(api_key=self.api_key)
+        
+        # 集成全局缓存（所有LLM调用自动走缓存）
+        self._cache = None
+        try:
+            from utils.llm_cache import get_llm_cache
+            self._cache = get_llm_cache()
+        except Exception:
+            # 缓存模块不可用时优雅降级
+            pass
     
     def chat(self, messages: List[Dict[str, str]], temperature: float = None, max_tokens: int = None) -> str:
         """
-        发送聊天请求
+        发送聊天请求（自动集成缓存）
         
         Args:
             messages: 消息列表，格式 [{"role": "system/user/assistant", "content": "..."}]
@@ -206,6 +215,27 @@ class LLMClient:
         temp = temperature or self.temperature
         tokens = max_tokens or self.max_tokens
         
+        # 提取system_prompt和user_prompt用于缓存键生成
+        system_prompt = ""
+        user_prompt = ""
+        for msg in messages:
+            if msg["role"] == "system":
+                system_prompt = msg["content"]
+            elif msg["role"] == "user":
+                user_prompt = msg["content"]
+        
+        # 尝试从缓存获取（使用lookup，只查不写，绝不调用LLM）
+        if self._cache:
+            cache_result = self._cache.lookup(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                temperature=temp
+            )
+            if cache_result.get("cached"):
+                return cache_result["response"]
+        
+        # 缓存未命中，调用LLM
+        result = ""
         if self.sdk_type == "openai":
             # OpenAI兼容API调用
             response = self.client.chat.completions.create(
@@ -214,7 +244,7 @@ class LLMClient:
                 temperature=temp,
                 max_tokens=tokens,
             )
-            return response.choices[0].message.content
+            result = response.choices[0].message.content
         
         elif self.sdk_type == "anthropic":
             # Claude原生API调用
@@ -235,7 +265,18 @@ class LLMClient:
                 temperature=temp,
                 max_tokens=tokens,
             )
-            return response.content[0].text
+            result = response.content[0].text
+        
+        # 存入缓存（使用store，只写不查）
+        if self._cache and result:
+            self._cache.set(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                response=result,
+                temperature=temp
+            )
+        
+        return result
     
     def chat_with_system(self, system_prompt: str, user_message: str, 
                          history: List[Dict[str, str]] = None) -> str:
